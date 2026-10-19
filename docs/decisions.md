@@ -206,3 +206,19 @@ predictable recovery path and an honest statement of what is unsupported.
 procedure (`upgrade head` from the consistent 0004 state) are documented here and in the migration module.
 The parametrized gap tests pin the exact schema remaining after an unsupported partial rollback so any
 future change is visible immediately.
+
+---
+
+## ADR-0017 — Revoke the unsafe platform-admin default from Phase 7 migration 0008
+
+**Decision.** Migration `0008_identity_and_authorization` added `app_users.is_platform_admin` with a server default of `TRUE`. This grants platform-wide privileges to pre-existing accounts during the migration and to inserts that omit the field. An institution-scoped `admin` role must not imply platform administration.
+
+Migration `0011_platform_admin_default_false` corrects this without rewriting applied migration history:
+- Change the database default to `FALSE`.
+- Revoke the platform-admin flag from all existing accounts because the database cannot distinguish an intentional grant from one inherited from the unsafe default.
+- Keep the downgrade security-monotonic: it does not restore the unsafe default or privileges.
+- Require a trusted database operator to explicitly re-grant platform administration to individually verified accounts after migration.
+
+**Why.** This is a privilege-escalation risk, not a cosmetic default mismatch. Failing closed is preferable to preserving potentially accidental global privileges.
+
+**Consequences.** After upgrading to `0011_platform_admin_default_false`, verify that no unintended platform administrators remain. Any intended platform administrator must be re-granted through a controlled operational procedure. The migration's data correction is intentionally not reversed by downgrade; restoring the old `TRUE` default would recreate the vulnerability. Live MySQL integration tests must verify existing-account revocation and the default for future inserts.
