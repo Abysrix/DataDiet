@@ -120,7 +120,7 @@ def test_upgrade_head_reaches_latest(fresh_db: None) -> None:
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0010_classification_downgrade_safety"
+        assert version == "0011_platform_admin_default_false"
 
         insp = inspect(engine)
         tables = set(insp.get_table_names())
@@ -151,6 +151,64 @@ def test_upgrade_head_reaches_latest(fresh_db: None) -> None:
     finally:
         engine.dispose()
 
+
+def test_phase7_platform_admin_default_is_safe(fresh_db: None) -> None:
+    """Migration 0011 revokes the unsafe 0008 TRUE default for every account."""
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0010_classification_downgrade_safety")
+    engine = create_engine(MIGRATION_DB_URL)
+    try:
+        # Simulate accounts created under 0008, where omitted values inherited TRUE.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO app_users (email, display_name, is_active) VALUES "
+                    "(:email1, :name1, 1), (:email2, :name2, 1)"
+                ),
+                {
+                    "email1": "legacy-admin-1@datadiet.test",
+                    "name1": "Legacy Account 1",
+                    "email2": "legacy-admin-2@datadiet.test",
+                    "name2": "Legacy Account 2",
+                },
+            )
+        with engine.connect() as conn:
+            before = conn.execute(
+                text("SELECT COUNT(*) FROM app_users WHERE is_platform_admin = 1")
+            ).scalar_one()
+        assert before == 2
+    finally:
+        engine.dispose()
+
+    command.upgrade(cfg, "head")
+    engine = create_engine(MIGRATION_DB_URL)
+    try:
+        with engine.connect() as conn:
+            # The corrective migration revokes all ambiguous existing grants.
+            privileged = conn.execute(
+                text("SELECT COUNT(*) FROM app_users WHERE is_platform_admin = 1")
+            ).scalar_one()
+            version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        assert privileged == 0
+        assert version == "0011_platform_admin_default_false"
+
+        # The database-level default must also be FALSE for future raw inserts.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO app_users (email, display_name, is_active) VALUES "
+                    "(:email, :name, 1)"
+                ),
+                {"email": "new-account@datadiet.test", "name": "New Account"},
+            )
+        with engine.connect() as conn:
+            is_admin = conn.execute(
+                text("SELECT is_platform_admin FROM app_users WHERE email = :email"),
+                {"email": "new-account@datadiet.test"},
+            ).scalar_one()
+        assert is_admin in (0, False)
+    finally:
+        engine.dispose()
 
 def test_foreign_keys_exist_and_restrict(fresh_db: None) -> None:
     command.upgrade(_alembic_config(), "head")
