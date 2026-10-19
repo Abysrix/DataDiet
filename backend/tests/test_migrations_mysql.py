@@ -210,6 +210,7 @@ def test_phase7_platform_admin_default_is_safe(fresh_db: None) -> None:
     finally:
         engine.dispose()
 
+
 def test_foreign_keys_exist_and_restrict(fresh_db: None) -> None:
     command.upgrade(_alembic_config(), "head")
     engine = create_engine(MIGRATION_DB_URL)
@@ -373,7 +374,7 @@ def test_rollback_below_the_boundary_fails_as_documented(fresh_db: None) -> None
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0010_classification_downgrade_safety"
+        assert version == "0011_platform_admin_default_false"
         assert _schema_snapshot(engine) == before, (
             "the failed rollback must not leave the schema altered in any way"
         )

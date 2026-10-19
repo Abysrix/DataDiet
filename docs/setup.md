@@ -78,7 +78,7 @@ Set-Location backend
 ..\.venv\Scripts\alembic.exe current
 ```
 
-Expected result: `0010_classification_downgrade_safety` (head). Without Docker,
+Expected result: `0011_platform_admin_default_false` (head). Without Docker,
 skip this section — the application still runs and reports the database as
 unreachable.
 
@@ -124,12 +124,12 @@ Backend:
 
 ```powershell
 Set-Location C:\Users\yadav\Desktop\DataDiet\backend
-..\.venv\Scripts\python.exe -m pytest              # 163 tests; 15 skipped by default
+..\.venv\Scripts\python.exe -m pytest              # 164 passed; 17 skipped by default
 ..\.venv\Scripts\python.exe -m ruff check .         # lint
 
-# The 14 skipped MySQL migration tests run when a disposable MySQL is available:
+# The 16 skipped MySQL migration tests run when a disposable MySQL is available:
 # $env:MIGRATION_TEST_DB_URL = "mysql+pymysql://root:@127.0.0.1:3307/datadiet_mig"
-# ..\.venv\Scripts\python.exe -m pytest tests/test_migrations_mysql.py     # 14 tests
+# ..\.venv\Scripts\python.exe -m pytest tests/test_migrations_mysql.py     # 16 tests
 ```
 
 Frontend:

@@ -467,12 +467,11 @@ describe("Asset governance view", () => {
     createDecision.mockResolvedValue({ ...DECISION, supersedes_decision_id: 4 });
     renderGovernance();
     // The correction select appears once the server-computed candidates load.
-    await screen.findByRole("combobox", { name: /correction/i });
-
-    // The earlier decision is offered as the correction target, pre-selected
-    // because it is the effective decision.
-    const correction = screen.getByRole("combobox", { name: /correction/i });
-    expect(correction).toHaveValue("4");
+    // Its value is set from the candidates fetch, so wait for the selection
+    // instead of racing the follow-up render.
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: /correction/i })).toHaveValue("4");
+    });
     expect(screen.getByText(/superseding decision #4/i)).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText(/^rationale/i), "Corrected after re-check.");
