@@ -34,6 +34,10 @@ class Settings(BaseSettings):
         env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        # Validation errors are surfaced by operator CLIs. Never echo the
+        # rejected value: a malformed DATABASE_URL or AUTH_JWT_SECRET must not
+        # leak credentials into a terminal, issue tracker, or CI log.
+        hide_input_in_errors=True,
     )
 
     app_name: str = "DataDiet API"

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -41,6 +41,7 @@ from app.core.auth import (
     PERMISSION_SOURCES_WRITE,
     CurrentUser,
     ensure_institution_access,
+    record_scope_denial,
     require_permission,
     resolve_institution_scope,
 )
@@ -69,27 +70,45 @@ def _pages(total: int, per_page: int) -> int:
 
 
 def _get_source(
-    db: Session, source_id: int, institution_id: int | None, current: CurrentUser
+    db: Session,
+    source_id: int,
+    institution_id: int | None,
+    current: CurrentUser,
+    *,
+    request: Request | None = None,
 ) -> DataSource:
     source = db.get(DataSource, source_id)
     if source is None or source.connector_type is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     if institution_id is not None and source.institution_id != institution_id:
         # Do not reveal the existence of another institution's source.
+        if request is not None:
+            record_scope_denial(request, current, db)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
-    ensure_institution_access(current, source.institution_id)
+    ensure_institution_access(
+        current, source.institution_id, request=request, db=db if request is not None else None
+    )
     return source
 
 
 def _get_job(
-    db: Session, job_id: int, institution_id: int | None, current: CurrentUser
+    db: Session,
+    job_id: int,
+    institution_id: int | None,
+    current: CurrentUser,
+    *,
+    request: Request | None = None,
 ):
     job = scan_service.get_job(db, job_id)
     if job is None or (institution_id is not None and job.institution_id != institution_id):
+        if job is not None and request is not None:
+            record_scope_denial(request, current, db)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found"
         )
-    ensure_institution_access(current, job.institution_id)
+    ensure_institution_access(
+        current, job.institution_id, request=request, db=db if request is not None else None
+    )
     return job
 
 
@@ -135,11 +154,12 @@ def _check_root_key(source_type: str, root_key: str | None) -> None:
 @router.post("/sources", response_model=Source, status_code=status.HTTP_201_CREATED)
 def create_source(
     data: SourceCreate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
     db: Session = Depends(get_db),
 ) -> Source:
     _validate_institution_exists(db, data.institution_id)
-    ensure_institution_access(current, data.institution_id)
+    ensure_institution_access(current, data.institution_id, request=request, db=db)
     _check_root_key(data.connector_type, data.root_key)
     _assert_name_available(db, data.name, data.institution_id)
 
@@ -227,11 +247,12 @@ def get_source(
 def update_source(
     source_id: int,
     data: SourceUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> Source:
-    source = _get_source(db, source_id, institution_id, current)
+    source = _get_source(db, source_id, institution_id, current, request=request)
     if data.name is not None and data.name != source.name:
         _assert_name_available(db, data.name, source.institution_id, exclude_id=source.id)
         source.name = data.name
@@ -261,11 +282,12 @@ def update_source(
 @router.post("/sources/{source_id}/validate", response_model=SourceValidationResult)
 def validate_source(
     source_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> SourceValidationResult:
-    source = _get_source(db, source_id, institution_id, current)
+    source = _get_source(db, source_id, institution_id, current, request=request)
     ok, message = scan_service.validate_source(db, source)
     return SourceValidationResult(
         id=source.id, ok=ok, message=message, validated_at=source.last_validated_at
@@ -282,22 +304,24 @@ def validate_source(
 )
 def start_scan(
     source_id: int,
+    request: Request,
     data: ScanRequest | None = None,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> ScanJobRead:
-    source = _get_source(db, source_id, institution_id, current)
+    source = _get_source(db, source_id, institution_id, current, request=request)
     return _create_and_maybe_run(db, source, data or ScanRequest(), current)
 
 
 @router.post("/scan-jobs", response_model=ScanJobRead, status_code=status.HTTP_201_CREATED)
 def create_scan(
     data: ScanCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> ScanJobRead:
-    source = _get_source(db, data.data_source_id, None, current)
+    source = _get_source(db, data.data_source_id, None, current, request=request)
     request = ScanRequest(batch_size=data.batch_size, run=data.run)
     return _create_and_maybe_run(db, source, request, current)
 
@@ -343,11 +367,12 @@ def get_scan_job(
 @router.post("/scan-jobs/{job_id}/run", response_model=ScanJobRead)
 def run_scan_job(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> ScanJobRead:
-    job = _get_job(db, job_id, institution_id, current)
+    job = _get_job(db, job_id, institution_id, current, request=request)
     try:
         job = scan_service.run_scan(db, job)
     except scan_service.InvalidTransition as exc:
@@ -358,11 +383,12 @@ def run_scan_job(
 @router.post("/scan-jobs/{job_id}/cancel", response_model=ScanJobRead)
 def cancel_scan_job(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> ScanJobRead:
-    job = _get_job(db, job_id, institution_id, current)
+    job = _get_job(db, job_id, institution_id, current, request=request)
     try:
         job = scan_service.cancel_job(db, job)
     except scan_service.InvalidTransition as exc:
@@ -377,11 +403,12 @@ def cancel_scan_job(
 )
 def retry_scan_job(
     job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_SOURCES_WRITE)),
 ) -> ScanJobRead:
-    job = _get_job(db, job_id, institution_id, current)
+    job = _get_job(db, job_id, institution_id, current, request=request)
     try:
         new_job = scan_service.retry_scan(db, job)
     except scan_service.InvalidTransition as exc:

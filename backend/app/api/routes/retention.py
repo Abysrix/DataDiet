@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas.retention import (
@@ -47,6 +47,7 @@ from app.core.auth import (
     PERMISSION_REVIEW_DECIDE,
     CurrentUser,
     ensure_institution_access,
+    record_scope_denial,
     require_permission,
     resolve_institution_scope,
 )
@@ -93,27 +94,37 @@ def _require_asset(db: Session, asset_id: int) -> InventoryRecord:
 
 
 def _require_asset_scoped(
-    db: Session, asset_id: int, institution_id: int | None, current: CurrentUser
+    db: Session,
+    asset_id: int,
+    institution_id: int | None,
+    current: CurrentUser,
+    *,
+    request: Request | None = None,
 ) -> InventoryRecord:
     """Load an asset and authorize it twice: against the declared filter *and*
     against the verified identity."""
     asset = _require_asset(db, asset_id)
     if institution_id is not None and asset.institution_id != institution_id:
+        if request is not None:
+            record_scope_denial(request, current, db)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="asset_out_of_scope"
         )
-    ensure_institution_access(current, asset.institution_id)
+    ensure_institution_access(
+        current, asset.institution_id, request=request, db=db if request is not None else None
+    )
     return asset
 
 
 @router.post("/policies", response_model=Policy, status_code=status.HTTP_201_CREATED)
 def create_policy(
     data: PolicyCreate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> Policy:
     _validate_institution_exists(db, data.institution_id)
-    ensure_institution_access(current, data.institution_id)
+    ensure_institution_access(current, data.institution_id, request=request, db=db)
     return retention_service.create_policy(db, data)
 
 
@@ -147,11 +158,12 @@ def get_policy(
 def update_policy(
     policy_id: int,
     data: PolicyUpdate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> Policy:
     p = _require_policy(db, policy_id)
-    ensure_institution_access(current, p.institution_id)
+    ensure_institution_access(current, p.institution_id, request=request, db=db)
     if data.status is not None and p.status not in ("draft", "approved", "active"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -180,11 +192,12 @@ def update_policy(
 def create_version(
     policy_id: int,
     data: PolicyVersionCreate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> PolicyVersion:
     p = _require_policy(db, policy_id)
-    ensure_institution_access(current, p.institution_id)
+    ensure_institution_access(current, p.institution_id, request=request, db=db)
     if p.status in ("retired", "inactive"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -197,11 +210,12 @@ def create_version(
 def activate_policy(
     policy_id: int,
     data: PolicyActivate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> Policy:
     p = _require_policy(db, policy_id)
-    ensure_institution_access(current, p.institution_id)
+    ensure_institution_access(current, p.institution_id, request=request, db=db)
     v = db.get(PolicyVersionModel, data.version_id)
     if v is None or v.policy_id != policy_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
@@ -211,14 +225,15 @@ def activate_policy(
 @router.post("/holds", response_model=Hold, status_code=status.HTTP_201_CREATED)
 def create_hold(
     data: HoldCreate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> Hold:
     _validate_institution_exists(db, data.institution_id)
-    ensure_institution_access(current, data.institution_id)
+    ensure_institution_access(current, data.institution_id, request=request, db=db)
     if data.asset_id is not None:
         asset = _require_asset(db, data.asset_id)
-        ensure_institution_access(current, asset.institution_id)
+        ensure_institution_access(current, asset.institution_id, request=request, db=db)
         if (
             data.institution_id is not None
             and asset.institution_id is not None
@@ -253,13 +268,14 @@ def list_holds(
 def release_hold(
     hold_id: int,
     data: HoldRelease,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_WRITE)),
     db: Session = Depends(get_db),
 ) -> Hold:
     h = retention_service.get_hold(db, hold_id)
     if not h:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hold not found")
-    ensure_institution_access(current, h.institution_id)
+    ensure_institution_access(current, h.institution_id, request=request, db=db)
     if h.status == "released":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Hold already released"
@@ -270,10 +286,11 @@ def release_hold(
 @router.post("/assess/{asset_id}", response_model=Assessment)
 def assess_asset(
     asset_id: int,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_RETENTION_ASSESS)),
     db: Session = Depends(get_db),
 ) -> Assessment:
-    _require_asset_scoped(db, asset_id, None, current)
+    _require_asset_scoped(db, asset_id, None, current, request=request)
     return retention_service.assess_asset(db, asset_id)
 
 
@@ -295,6 +312,7 @@ def assessment_history(
 def create_decision(
     assessment_id: int,
     data: DecisionCreate,
+    request: Request,
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_REVIEW_DECIDE)),
     db: Session = Depends(get_db),
@@ -313,10 +331,13 @@ def create_decision(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found"
         )
     if institution_id is not None and assessment.institution_id != institution_id:
+        record_scope_denial(request, current, db)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="assessment_out_of_scope"
         )
-    ensure_institution_access(current, assessment.institution_id)
+    ensure_institution_access(
+        current, assessment.institution_id, request=request, db=db
+    )
     try:
         return retention_service.create_decision(
             db,

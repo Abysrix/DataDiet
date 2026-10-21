@@ -66,7 +66,7 @@ Key properties:
 - **Rationale enforcement.** Rejection and information requests require a substantive rationale (≥ 10 characters), validated in the request schema and enforced again by the service. The free-text rationale is stored on the decision row and is deliberately **not** copied into the audit payload.
 - **Transactional audit.** `audit.record_event(..., commit=False)` lets the decision row and its audit events (`review.decision_created`, plus `review.decision_rejected` / `review.information_requested`) commit in a single transaction; a partial write cannot leave governance history inconsistent.
 - **A decision is not an execution command.** Recording any decision — including approval — performs no archive, restore, move, or delete. The unified view states this explicitly (`provenance.file_operations`), and no file-operation endpoint exists.
-- **Tenant scope.** Every nested lookup validates the optional `institution_id` against the resource and reports a mismatch as 404 (scope membership is not disclosed). This is validation, not authorization: per ADR-0010, all governance writes return 503 in `ENVIRONMENT=production` until a real identity context exists.
+- **Tenant scope.** Every nested lookup validates the optional `institution_id` against the resource and reports a mismatch as 404 (scope membership is not disclosed). This is validation, not authorization: at the time of ADR-0013 all governance writes returned 503 in `ENVIRONMENT=production` until a real identity context existed (ADR-0010); Phase 7 replaced that historical guard with permission plus institution-scope checks (ADR-0014).
 - **Read auditing.** Existing convention does not audit reads; the review-queue and governance-view reads are therefore not audited. State changes (decisions, rejections, information requests, stale/hold conflicts) are.
 
 **Why.** The requirements demand an append-only, tamper-evident review workflow with server-enforced invariants and safe failure. Reusing the Phase 3 decision/assessment subsystem avoids divergent histories, and database-enforced uniqueness plus optimistic-concurrency tokens close the concurrency and staleness gaps without inventing an execution capability the system does not have.
@@ -222,3 +222,37 @@ Migration `0011_platform_admin_default_false` corrects this without rewriting ap
 **Why.** This is a privilege-escalation risk, not a cosmetic default mismatch. Failing closed is preferable to preserving potentially accidental global privileges.
 
 **Consequences.** After upgrading to `0011_platform_admin_default_false`, verify that no unintended platform administrators remain. Any intended platform administrator must be re-granted through a controlled operational procedure. The migration's data correction is intentionally not reversed by downgrade; restoring the old `TRUE` default would recreate the vulnerability. Live MySQL integration tests must verify existing-account revocation and the default for future inserts.
+
+---
+
+## ADR-0018 — Migration preflight is read-only; backups and re-grants are human gates
+
+**Decision.** Add `scripts/migration_preflight.py`, a read-only operator command that reports the configured environment, a credential-free database target, the stamped Alembic revision, the repository head and the pending revisions. It classifies failures with distinct exit codes (2 unreachable, 3 not under Alembic control or ambiguous version table, 4 unknown/off-chain revision, 5 multiple heads) and never applies or writes anything. The migration runbook (`docs/setup.md` §8) requires a test-restored backup and a documented administrator recovery plan before `upgrade head`. Recovery uses the existing offline `scripts/bootstrap_admin.py`, one named account at a time, audited in the same transaction; no HTTP grant endpoint is added.
+
+**Why.** `0011` resets every platform-admin flag, so applying it "and seeing what happens" is unacceptable. `alembic current` reports a revision but not the target or environment, and a hand-typed masking snippet would be untested and easy to get wrong. A small, tested command covers the machine-checkable preflight criteria without new dependencies, while the authorization-critical decisions stay with an operator.
+
+**Consequences.** Existing-database migrations follow a documented procedure. Operators must treat non-zero preflight exit codes as stop signals. The preflight is not wired into `alembic upgrade` and cannot prove a backup exists; it complements, and does not replace, change control. Downgrades remain security-monotonic at `0011` and unsupported below `0005` (ADR-0017, ADR-0016).
+
+---
+
+## ADR-0019 — CI runs on Linux GitHub Actions; the Windows PowerShell gate remains local
+
+**Decision.** Add `.github/workflows/ci.yml`, triggered on every pull request and every push to `main`. It is configured to run on a GitHub-hosted Ubuntu runner with pinned Python 3.14.1 and Node.js 24.13.1, installs `backend/requirements-dev.txt` and the frontend `package-lock.json` (`npm ci`), and runs backend Ruff, operator-script Ruff, backend pytest, the 19-test live MySQL migration suite against an ephemeral `mysql:8.4` service, frontend type checking, Vitest, and the production build. The MySQL step requires `MIGRATION_TEST_DB_URL`, sets `MIGRATION_TEST_ALLOW_DROP=1` only for that step, and asserts that 19 tests pass (not skipped). GitHub Actions are pinned to full commit SHAs with release comments, and the MySQL image is pinned to a verified multi-arch digest. No repository secret or production credential is used, and the job stops at the first failing step.
+
+Extend `scripts/check.ps1` with the same operator-script Ruff invocation (`ruff check ..\scripts` from `backend/`) so the local Windows PowerShell 5.1 gate and CI cover the same operator code. The existing explicit `$LASTEXITCODE` assertions and fail-fast order remain; Ruff's formatter is deliberately not run.
+
+The local gate stays the canonical developer workflow on Windows. CI does not invoke `check.ps1` because the script uses Windows virtual-environment paths; it runs the equivalent commands on Linux. The Windows-only symlink test is expected to execute rather than skip on the Linux runner.
+
+**Why.** The repository had no automated pull-request validation, so correctness depended on a developer remembering to run the local script. The migration suite is the core safety check for `0011` and `0012`, and GitHub's service containers provide a disposable MySQL on Linux without adding a durable test database. Running the same Ruff configuration over `scripts/` closes a gap where operator code was only linted by hand. A single Linux job avoids duplicated test logic and unnecessary services, while the Windows gate remains available for the environment the project is developed in.
+
+**Consequences.** Required status checks and branch protection are repository settings that must be enabled separately; the workflow file alone does not block a merge. Python dependencies are still range-pinned with no lockfile (a lockfile was not added because it could not be validly generated and tested across the supported platforms in this environment), and dependency/secret scanning is not configured; these remain supply-chain gaps (`docs/production-readiness.md`). The workflow has not yet executed on GitHub until a commit is pushed or a pull request is opened. CI validates code, not a deployment: it does not run migrations against a durable database, provision a real identity provider, or prove production configuration.
+
+---
+
+## ADR-0020 — Migration `0012` records the `0011` reset; it does not reconstruct identity
+
+**Decision.** Add forward migration `0012_audit_platform_admin_reset`, which appends one `audit_events` row (`users.platform_admin_reset_recorded`) after `0011` has run. The payload records the reset revision, the post-reset platform-administrator count, and the fact that the operator must preserve a pre-migration export in the change ticket. `0012` changes no account or privilege; the insert is idempotent by event type/entity id, and `downgrade()` is a no-op so the append-only audit row is never deleted.
+
+**Why.** Reverting `0011` or editing its historical behavior would either recreate the accidental privilege grant or leave already-migrated databases without the record. A forward-only migration is safe for both fresh and existing databases, provided it does not pretend to know which identities were revoked. The pre-migration export is the human-owned evidence of the prior grant list; `0012` is durable evidence that the reset revision ran and the post-reset state was observed. Re-granting remains a separate, explicitly audited `bootstrap_admin.py` action.
+
+**Consequences.** Existing databases at `0011` receive the audit row on the next upgrade; databases already at `0012` do not duplicate it. A database where administrators were deliberately re-granted before `0012` records a nonzero post-reset count, which is accurate and must be reconciled with the ticket. `0012` cannot repair a missing pre-migration export and must not be presented as doing so. Live MySQL tests verify the event, the no-privilege-change property, and idempotency across downgrade/re-upgrade.

@@ -402,6 +402,54 @@ def test_scope_filters_are_validated_against_the_identity(
     assert viewer.get(f"{BASE}/assets?institution_id={other.id}").status_code == 404
 
 
+def test_out_of_scope_write_is_audited_without_disclosure(
+    client: TestClient, db: Session, scoped_client
+) -> None:
+    mine = models.Institution(code="AUTH8", name="Auth Eight")
+    other = models.Institution(code="AUTH9", name="Auth Nine")
+    db.add_all([mine, other])
+    db.commit()
+    db.refresh(mine)
+    db.refresh(other)
+
+    admin = scoped_client(mine.id, role="admin")
+    response = admin.post(
+        f"{BASE}/retention/policies",
+        json={"institution_id": other.id, "name": "Cross-tenant policy"},
+    )
+
+    # Same 404 as an authorized tenant's missing resource: the response does
+    # not confirm that the other institution exists.
+    assert response.status_code == 404
+    assert response.json()["detail"] == "out_of_scope"
+
+    db.expire_all()
+    events = db.execute(
+        select(models.AuditEvent).where(
+            models.AuditEvent.event_type == "authorization.denied"
+        )
+    ).scalars().all()
+    assert len(events) == 1
+    assert events[0].actor == f"admin.{mine.id}@datadiet.test"
+    assert events[0].payload["method"] == "POST"
+    assert events[0].payload["required"] == "institution_scope"
+    assert "institution_id" not in events[0].payload
+
+    # A read probe is not written to the audit log.
+    assert admin.get(f"{BASE}/assets?institution_id={other.id}").status_code == 404
+    db.expire_all()
+    assert (
+        len(
+            db.execute(
+                select(models.AuditEvent).where(
+                    models.AuditEvent.event_type == "authorization.denied"
+                )
+            ).scalars().all()
+        )
+        == 1
+    )
+
+
 def test_a_member_of_several_institutions_must_name_one(
     client: TestClient, db: Session, scoped_client
 ) -> None:

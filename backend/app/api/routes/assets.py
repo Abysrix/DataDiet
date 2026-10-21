@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas.assets import Asset, AssetCreate, AssetListResponse, AssetUpdate
@@ -31,12 +31,13 @@ router = APIRouter(prefix="/assets")
 @router.post("", response_model=Asset, status_code=status.HTTP_201_CREATED)
 def create_asset(
     data: AssetCreate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_ASSETS_WRITE)),
     db: Session = Depends(get_db),
 ) -> Asset:
     # Scope is checked before the row exists, so an unauthorized create never
     # writes anything.
-    ensure_institution_access(current, data.institution_id)
+    ensure_institution_access(current, data.institution_id, request=request, db=db)
     asset = assets_service.create_asset(db, data)
     return asset
 
@@ -87,12 +88,13 @@ def get_asset(
 def update_asset(
     asset_id: int,
     data: AssetUpdate,
+    request: Request,
     current: CurrentUser = Depends(require_permission(PERMISSION_ASSETS_WRITE)),
     db: Session = Depends(get_db),
 ) -> Asset:
     asset = assets_service.get_asset(db, asset_id)
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-    ensure_institution_access(current, asset.institution_id)
+    ensure_institution_access(current, asset.institution_id, request=request, db=db)
     asset = assets_service.update_asset(db, asset, data)
     return asset

@@ -123,14 +123,9 @@ def dev_login(data: DevLoginRequest, db: Session = Depends(get_db)) -> TokenResp
     require_auth_configured()
     settings = get_settings()
     if settings.environment == "production" or not settings.auth_dev_provider_enabled:
-        record_event(
-            db,
-            actor=data.email,
-            event_type="auth.dev_login_denied",
-            entity_type="app_user",
-            entity_id=data.email,
-            payload={"reason": "development_provider_disabled"},
-        )
+        # Refuse before touching the database. In particular, do not create an
+        # audit row whose actor/entity are attacker-controlled input: a public
+        # unauthenticated request must not be able to write to the audit log.
         raise _unconfigured()
 
     if data.institution_id is not None and db.get(Institution, data.institution_id) is None:

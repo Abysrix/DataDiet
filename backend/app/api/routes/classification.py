@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.schemas.classification import (
@@ -29,6 +29,7 @@ from app.core.auth import (
     PERMISSION_GOVERNANCE_READ,
     CurrentUser,
     ensure_institution_access,
+    record_scope_denial,
     require_permission,
     resolve_institution_scope,
 )
@@ -42,14 +43,23 @@ router = APIRouter(prefix="/classification")
 
 
 def _require_asset_scoped(
-    db: Session, asset_id: int, institution_id: int | None, current: CurrentUser
+    db: Session,
+    asset_id: int,
+    institution_id: int | None,
+    current: CurrentUser,
+    *,
+    request: Request | None = None,
 ) -> InventoryRecord:
     asset = db.get(InventoryRecord, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="asset_not_found")
     if institution_id is not None and asset.institution_id != institution_id:
+        if request is not None:
+            record_scope_denial(request, current, db)
         raise HTTPException(status_code=404, detail="asset_out_of_scope")
-    ensure_institution_access(current, asset.institution_id)
+    ensure_institution_access(
+        current, asset.institution_id, request=request, db=db if request is not None else None
+    )
     return asset
 
 
@@ -84,11 +94,12 @@ def list_rules(
 @router.post("/assets/{asset_id}", response_model=ClassificationResultSchema, status_code=201)
 def run_classification(
     asset_id: int,
+    request: Request,
     institution_id: int | None = Query(default=None),
     current: CurrentUser = Depends(require_permission(PERMISSION_CLASSIFICATION_WRITE)),
     db: Session = Depends(get_db),
 ) -> ClassificationResultSchema:
-    asset = _require_asset_scoped(db, asset_id, institution_id, current)
+    asset = _require_asset_scoped(db, asset_id, institution_id, current, request=request)
     created_by = current.email
     row, created = classification_service.classify_and_persist(
         db, asset, created_by=created_by

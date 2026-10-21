@@ -34,6 +34,7 @@ Instructions for AI agents and new engineers working in this repository. Read
 | UI page / navigation entry | `frontend/src/pages/`, `frontend/src/components/nav.ts` |
 | API call | `frontend/src/api/`, types in `frontend/src/api/types.ts` |
 | Shared UI primitives | `frontend/src/components/ui/` |
+| CI workflow or validation gate | `.github/workflows/ci.yml`, `scripts/check.ps1` |
 
 ## Conventions
 
@@ -58,9 +59,9 @@ Set-Location C:\Users\yadav\Desktop\DataDiet
 .\scripts\check.ps1
 ```
 
-That runs, in order: backend ruff, backend pytest, frontend typecheck, frontend
-Vitest, and the production build. All five must pass. If Docker is available and
-you touched models, also verify migrations:
+That runs, in order: backend ruff, operator-script ruff, backend pytest,
+frontend typecheck, frontend Vitest, and the production build. All six must
+pass. If Docker is available and you touched models, also verify migrations:
 
 ```powershell
 Set-Location backend

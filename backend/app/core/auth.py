@@ -417,12 +417,33 @@ def resolve_institution_scope(current: CurrentUser, requested: int | None) -> in
     )
 
 
-def ensure_institution_access(current: CurrentUser, institution_id: int | None) -> None:
-    """Refuse access to a resource belonging to another institution."""
-    if not current.can_access(institution_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="out_of_scope"
-        )
+def record_scope_denial(request: Request, current: CurrentUser, db: Session) -> None:
+    """Record a refused institution-scope check on a state-changing request."""
+    _audit_denied_write(request, current, db, required="institution_scope")
+
+
+def ensure_institution_access(
+    current: CurrentUser,
+    institution_id: int | None,
+    *,
+    request: Request | None = None,
+    db: Session | None = None,
+) -> None:
+    """Refuse access to a resource belonging to another institution.
+
+    Write routes pass ``request`` and ``db`` so a refused cross-institution
+    mutation is recorded as ``authorization.denied`` before the same 404 is
+    returned. The event deliberately omits the requested institution id, so the
+    audit trail does not become a directory of other tenants.
+    """
+    if current.can_access(institution_id):
+        return
+    if request is not None and db is not None:
+        record_scope_denial(request, current, db)
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="out_of_scope"
+    )
+
 
 
 def visible_institutions(current: CurrentUser) -> Iterable[int] | None:

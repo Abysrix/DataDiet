@@ -674,19 +674,26 @@ def test_production_never_offers_development_sign_in(
     monkeypatch.setenv("AUTH_JWT_SECRET", secrets.token_urlsafe(48))
     get_settings.cache_clear()
     try:
-        # Sign-in itself is refused, and the audit says why.
+        with test_db() as db:
+            before = db.execute(
+                select(models.AuditEvent).where(
+                    models.AuditEvent.event_type == "auth.dev_login_denied"
+                )
+            ).scalars().all()
+        # Sign-in itself is refused, and the public denial writes no audit row:
+        # attacker-controlled identity fields must never reach the audit log.
         response = client.post(
             "/api/v1/auth/dev-login",
             json={"email": "nobody@datadiet.test", "platform_admin": True},
         )
         assert response.status_code == 503
         with test_db() as db:
-            denied = select(models.AuditEvent).where(
-                models.AuditEvent.event_type == "auth.dev_login_denied"
-            )
-            events = db.execute(denied).scalars().all()
-        assert len(events) == 1
-        assert events[0].payload["reason"] == "development_provider_disabled"
+            after = db.execute(
+                select(models.AuditEvent).where(
+                    models.AuditEvent.event_type == "auth.dev_login_denied"
+                )
+            ).scalars().all()
+        assert len(before) == len(after) == 0
 
         # ...and the public config endpoint says so rather than inviting a
         # development sign-in the server would reject.

@@ -6,7 +6,11 @@ development environment, so the instance is provisioned separately — see
 ``docs/setup.md``).
 
 The URL must point at a *disposable* database: the test drops and recreates it.
+Safety is enforced by ``tests/mysql_test_guard.py``: the operator must also set
+``MIGRATION_TEST_ALLOW_DROP=1``, the database name must match
+``datadiet_(mig|test|ci)[_suffix]``, and the host must be loopback.
 
+    set MIGRATION_TEST_ALLOW_DROP=1
     set MIGRATION_TEST_DB_URL=mysql+pymysql://root:@127.0.0.1:3307/datadiet_mig
     python -m pytest tests/test_migrations_mysql.py -v
 
@@ -36,14 +40,17 @@ asserted to fail with the documented error by
 
 from __future__ import annotations
 
+import importlib.util
 import os
+import sys
 from collections.abc import Generator
 from datetime import UTC, datetime
 
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, text
+from mysql_test_guard import disposable_database
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
@@ -68,18 +75,22 @@ def _alembic_config() -> Config:
     return cfg
 
 
+def _load_operator_script(name: str):
+    """Import a repository operator script (``scripts/`` is not a package)."""
+    path = os.path.join(REPO_ROOT, "scripts", f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"scripts_{name}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture()
 def fresh_db() -> Generator[None, None, None]:
-    """Drop and recreate the disposable database, then remove the engine."""
-    engine = create_engine(MIGRATION_DB_URL)
-    database = engine.url.database
-    assert database, "MIGRATION_TEST_DB_URL must include a database name"
-    with engine.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS `{database}`"))
-        conn.execute(text(f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4"))
-        conn.execute(text(f"USE `{database}`"))
-    yield
-    engine.dispose()
+    """Drop/recreate only a validated, explicitly opted-in disposable database."""
+    with disposable_database(os.environ):
+        yield
 
 
 def _schema_snapshot(engine) -> dict[str, str]:
@@ -120,7 +131,7 @@ def test_upgrade_head_reaches_latest(fresh_db: None) -> None:
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0011_platform_admin_default_false"
+        assert version == "0012_audit_platform_admin_reset"
 
         insp = inspect(engine)
         tables = set(insp.get_table_names())
@@ -190,7 +201,7 @@ def test_phase7_platform_admin_default_is_safe(fresh_db: None) -> None:
             ).scalar_one()
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         assert privileged == 0
-        assert version == "0011_platform_admin_default_false"
+        assert version == "0012_audit_platform_admin_reset"
 
         # The database-level default must also be FALSE for future raw inserts.
         with engine.begin() as conn:
@@ -207,6 +218,145 @@ def test_phase7_platform_admin_default_is_safe(fresh_db: None) -> None:
                 {"email": "new-account@datadiet.test"},
             ).scalar_one()
         assert is_admin in (0, False)
+    finally:
+        engine.dispose()
+
+
+def test_0012_records_the_reset_without_changing_access(fresh_db: None) -> None:
+    """The forward audit record is durable, idempotent, and privilege-neutral."""
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0011_platform_admin_default_false")
+    engine = create_engine(MIGRATION_DB_URL)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO app_users "
+                    "(email, display_name, is_platform_admin, is_active) "
+                    "VALUES (:email, :name, 1, 1)"
+                ),
+                {"email": "regranted@datadiet.test", "name": "Regranted Admin"},
+            )
+    finally:
+        engine.dispose()
+
+    command.upgrade(cfg, "head")
+    engine = create_engine(MIGRATION_DB_URL)
+    try:
+        with engine.connect() as conn:
+            version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            privileged = conn.execute(
+                text("SELECT is_platform_admin FROM app_users WHERE email = :email"),
+                {"email": "regranted@datadiet.test"},
+            ).scalar_one()
+            event_count = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM audit_events WHERE event_type = "
+                    "'users.platform_admin_reset_recorded'"
+                )
+            ).scalar_one()
+            recorded_count = conn.execute(
+                text(
+                    "SELECT JSON_EXTRACT(payload, '$.platform_admin_count_after') "
+                    "FROM audit_events WHERE event_type = "
+                    "'users.platform_admin_reset_recorded'"
+                )
+            ).scalar_one()
+        assert version == "0012_audit_platform_admin_reset"
+        assert privileged in (1, True), "0012 must not revoke a post-0011 grant"
+        assert event_count == 1
+        assert int(recorded_count) == 1
+    finally:
+        engine.dispose()
+
+    # The audit record is append-only and 0012's downgrade is deliberately a
+    # no-op; a round trip must not duplicate or delete the event.
+    command.downgrade(cfg, "0011_platform_admin_default_false")
+    command.upgrade(cfg, "head")
+    engine = create_engine(MIGRATION_DB_URL)
+    try:
+        with engine.connect() as conn:
+            event_count = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM audit_events WHERE event_type = "
+                    "'users.platform_admin_reset_recorded'"
+                )
+            ).scalar_one()
+        assert event_count == 1
+    finally:
+        engine.dispose()
+
+
+def test_preflight_reports_pending_0011_then_head(fresh_db: None) -> None:
+    """The read-only preflight classifies a real MySQL target correctly."""
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0010_classification_downgrade_safety")
+
+    preflight = _load_operator_script("migration_preflight")
+    pending = preflight.assess(MIGRATION_DB_URL)
+
+    assert pending.current_revision == "0010_classification_downgrade_safety"
+    assert pending.pending == (
+        "0011_platform_admin_default_false",
+        "0012_audit_platform_admin_reset",
+    )
+    assert pending.includes_admin_reset is True
+
+    command.upgrade(cfg, "head")
+    applied = preflight.assess(MIGRATION_DB_URL)
+
+    assert applied.current_revision == "0012_audit_platform_admin_reset"
+    assert applied.pending == ()
+    assert applied.includes_admin_reset is False
+
+
+def test_0011_recovery_promotes_only_the_named_account(fresh_db: None) -> None:
+    """bootstrap_admin.py is the audited recovery path after the 0011 reset."""
+    command.upgrade(_alembic_config(), "head")
+    bootstrap_admin = _load_operator_script("bootstrap_admin")
+
+    engine = create_engine(MIGRATION_DB_URL)
+    factory = sessionmaker(bind=engine)
+    try:
+        with factory() as db:
+            db.add_all(
+                [
+                    models.AppUser(
+                        email="verified@datadiet.test",
+                        display_name="Verified Admin",
+                        is_platform_admin=False,
+                        is_active=True,
+                    ),
+                    models.AppUser(
+                        email="bystander@datadiet.test",
+                        display_name="Bystander Admin",
+                        is_platform_admin=False,
+                        is_active=True,
+                    ),
+                ]
+            )
+            db.commit()
+            admin_id = bootstrap_admin.bootstrap(
+                db,
+                email="verified@datadiet.test",
+                display_name="Verified Admin",
+                institution_id=None,
+                role="admin",
+                actor="ops.test",
+            )
+        with factory() as db:
+            users = {user.email: user for user in db.execute(select(models.AppUser)).scalars()}
+            events = db.execute(
+                select(models.AuditEvent).where(
+                    models.AuditEvent.event_type == "users.bootstrap_admin"
+                )
+            ).scalars()
+            assert users["verified@datadiet.test"].is_platform_admin is True
+            assert users["bystander@datadiet.test"].is_platform_admin is False
+            assert [
+                (event.actor, event.payload["action"], event.payload["email"]) for event in events
+            ] == [("ops.test", "promoted", "verified@datadiet.test")]
+        assert admin_id > 0
     finally:
         engine.dispose()
 
@@ -374,7 +524,7 @@ def test_rollback_below_the_boundary_fails_as_documented(fresh_db: None) -> None
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0011_platform_admin_default_false"
+        assert version == "0012_audit_platform_admin_reset"
         assert _schema_snapshot(engine) == before, (
             "the failed rollback must not leave the schema altered in any way"
         )
