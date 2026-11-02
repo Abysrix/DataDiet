@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui/Spinner";
+import { ToastProvider } from "./components/ui/Toast";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import DataInventory from "./pages/DataInventory";
@@ -65,27 +66,35 @@ function SignInRoute() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/signin" element={<SignInRoute />} />
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/inventory" element={<DataInventory />} />
-            <Route path="/risk" element={<RiskAnalysis />} />
-            <Route path="/classification" element={<Classification />} />
-            <Route path="/retention" element={<RetentionPolicies />} />
-            <Route path="/holds" element={<Holds />} />
-            <Route path="/recommendations" element={<Recommendations />} />
-            <Route path="/assessments/:assetId" element={<AssetAssessment />} />
-            <Route path="/governance/assets/:assetId" element={<AssetGovernance />} />
-            <Route path="/archive" element={<Archive />} />
-            <Route path="/retrieval" element={<RetrievalRequests />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/users" element={<UserManagement />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      {/*
+        Mounted now, before any page raises one: `ToastProvider` keeps its
+        `aria-live` region in the tree for the whole session, and a live region
+        that appears with its message is not reliably announced. Routes, layout
+        and page behaviour are untouched — no page calls `useToast()` yet.
+      */}
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/signin" element={<SignInRoute />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/inventory" element={<DataInventory />} />
+              <Route path="/risk" element={<RiskAnalysis />} />
+              <Route path="/classification" element={<Classification />} />
+              <Route path="/retention" element={<RetentionPolicies />} />
+              <Route path="/holds" element={<Holds />} />
+              <Route path="/recommendations" element={<Recommendations />} />
+              <Route path="/assessments/:assetId" element={<AssetAssessment />} />
+              <Route path="/governance/assets/:assetId" element={<AssetGovernance />} />
+              <Route path="/archive" element={<Archive />} />
+              <Route path="/retrieval" element={<RetrievalRequests />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/users" element={<UserManagement />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

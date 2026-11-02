@@ -34,22 +34,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDate, humanize } from "../lib/format";
-
-type Tone = "slate" | "indigo" | "emerald" | "sky" | "amber" | "orange" | "rose";
-
-const CONFIDENCE_TONES: Record<string, Tone> = {
-  high: "emerald",
-  medium: "sky",
-  low: "amber",
-  none: "slate",
-};
-
-const SEVERITY_TONES: Record<string, Tone> = {
-  info: "slate",
-  low: "sky",
-  medium: "amber",
-  high: "rose",
-};
+import { toneForConfidence, toneForSeverity } from "../lib/semantic";
 
 export default function Classification() {
   const [assetId, setAssetId] = useState<number | null>(null);
@@ -156,7 +141,10 @@ function AssetPicker({
 
 function LatestClassificationCard({ assetId }: { assetId: number }) {
   const { has } = useAuth();
-  const latest = useApiQuery(() => fetchLatestClassification(assetId));
+  const latest = useApiQuery(
+    (signal) => fetchLatestClassification(assetId, signal),
+    [assetId],
+  );
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -226,7 +214,7 @@ function ResultDetail({ result, onRan }: { result: ClassificationResult; onRan: 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Badge tone={CONFIDENCE_TONES[result.confidence] ?? "slate"}>
+        <Badge tone={toneForConfidence(result.confidence)}>
           {humanize(result.outcome)}
         </Badge>
         <span className="text-sm text-slate-700">
@@ -319,10 +307,10 @@ function EvidenceList({ result }: { result: ClassificationResult }) {
               <span className="font-mono text-xs text-slate-600">{item.rule_id}</span>
               <span className="text-xs text-slate-400">{item.rule_version}</span>
               {item.proposed_category ? (
-                <Badge tone="indigo">category: {item.proposed_category}</Badge>
+                <Badge tone="accent">category: {item.proposed_category}</Badge>
               ) : null}
               {item.proposed_sensitivity ? (
-                <Badge tone="sky">sensitivity: {item.proposed_sensitivity}</Badge>
+                <Badge tone="info">sensitivity: {item.proposed_sensitivity}</Badge>
               ) : null}
             </div>
             <p className="mt-1 text-sm text-slate-700">
@@ -339,7 +327,10 @@ function EvidenceList({ result }: { result: ClassificationResult }) {
 /* ------------------------------ quality findings -------------------------- */
 
 function QualityFindingsCard({ assetId }: { assetId: number }) {
-  const quality = useApiQuery(() => fetchAssetQuality(assetId));
+  const quality = useApiQuery(
+    (signal) => fetchAssetQuality(assetId, signal),
+    [assetId],
+  );
 
   return (
     <Card>
@@ -383,10 +374,10 @@ function FindingRow({ finding }: { finding: QualityFinding }) {
   return (
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={SEVERITY_TONES[finding.severity] ?? "slate"}>{finding.severity}</Badge>
+        <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
         <span className="font-mono text-xs text-slate-600">{finding.check}</span>
         {finding.duplicate_status ? (
-          <Badge tone={finding.duplicate_status === "confirmed" ? "rose" : "amber"}>
+          <Badge tone={finding.duplicate_status === "confirmed" ? "critical" : "warning"}>
             {finding.duplicate_status} duplicate
           </Badge>
         ) : null}
@@ -415,8 +406,9 @@ function FindingRow({ finding }: { finding: QualityFinding }) {
 /* --------------------------------- history -------------------------------- */
 
 function HistoryCard({ assetId }: { assetId: number }) {
-  const history = useApiQuery(() =>
-    fetchClassificationHistory(assetId, { page: 1, per_page: 10 }),
+  const history = useApiQuery(
+    (signal) => fetchClassificationHistory(assetId, { page: 1, per_page: 10 }, signal),
+    [assetId],
   );
 
   return (
@@ -446,7 +438,7 @@ function HistoryCard({ assetId }: { assetId: number }) {
               {history.data.results.map((row) => (
                 <li key={row.id} className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={CONFIDENCE_TONES[row.confidence] ?? "slate"}>
+                    <Badge tone={toneForConfidence(row.confidence)}>
                       {humanize(row.outcome)}
                     </Badge>
                     <span className="text-xs text-slate-500">
@@ -476,7 +468,7 @@ function HistoryCard({ assetId }: { assetId: number }) {
 /* ---------------------------------- rules --------------------------------- */
 
 function RulesCard() {
-  const rules = useApiQuery(fetchClassificationRules);
+  const rules = useApiQuery(fetchClassificationRules, []);
 
   return (
     <Card>
@@ -500,7 +492,7 @@ function RulesTable({ rules }: { rules: ClassificationRules }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-        <Badge tone="indigo">{rules.rule_version}</Badge>
+        <Badge tone="accent">{rules.rule_version}</Badge>
         <span>Outcomes: {rules.outcomes.join(", ")}</span>
         <span>Sensitivities: {rules.sensitivities.join(", ")}</span>
       </div>
@@ -523,7 +515,7 @@ function RulesTable({ rules }: { rules: ClassificationRules }) {
                 <td className="px-5 py-3 text-slate-600">{rule.field}</td>
                 <td className="px-5 py-3 text-slate-700">{humanize(rule.effect)}</td>
                 <td className="px-5 py-3">
-                  <Badge tone={CONFIDENCE_TONES[rule.confidence] ?? "slate"}>
+                  <Badge tone={toneForConfidence(rule.confidence)}>
                     {rule.confidence}
                   </Badge>
                 </td>

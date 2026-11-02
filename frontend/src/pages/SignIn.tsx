@@ -35,7 +35,7 @@ const ROLE_OPTIONS: Array<{ value: RoleValue; label: string }> = [
 ];
 
 export default function SignIn() {
-  const { data: config, loading, error, refetch } = useApiQuery(fetchAuthConfig);
+  const { data: config, loading, error, refetch } = useApiQuery(fetchAuthConfig, []);
   const { sessionExpired } = useAuth();
 
   return (

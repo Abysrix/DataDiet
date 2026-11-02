@@ -20,13 +20,17 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDate } from "../lib/format";
+import { toneForHoldStatus } from "../lib/semantic";
 
 export default function Holds() {
   const { activeInstitutionId, has } = useAuth();
-  const { data, loading, error, refetch } = useApiQuery(() =>
-    listHolds(
-      activeInstitutionId !== null ? { institution_id: activeInstitutionId } : undefined,
-    ),
+  const { data, loading, error, refetch } = useApiQuery(
+    (signal) =>
+      listHolds(
+        activeInstitutionId !== null ? { institution_id: activeInstitutionId } : undefined,
+        signal,
+      ),
+    [activeInstitutionId],
   );
 
   return (
@@ -239,7 +243,7 @@ function HoldRow({ hold, onReleased }: { hold: Hold; onReleased: () => void }) {
         {hold.asset_id !== null ? `#${hold.asset_id}` : "All assets"}
       </td>
       <td className="px-5 py-3">
-        <Badge tone={hold.status === "active" ? "rose" : "slate"}>{hold.status}</Badge>
+        <Badge tone={toneForHoldStatus(hold.status)}>{hold.status}</Badge>
       </td>
       <td className="px-5 py-3 text-slate-500">{formatDate(hold.created_at.slice(0, 10))}</td>
       <td className="px-5 py-3 text-slate-500">

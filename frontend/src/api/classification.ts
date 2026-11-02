@@ -18,8 +18,10 @@ import type {
 export const CLASSIFICATION_PREFIX = "/api/v1/classification";
 
 /** The documented rule table and its version, served by the backend. */
-export function fetchClassificationRules(): Promise<ClassificationRules> {
-  return apiGet<ClassificationRules>(`${CLASSIFICATION_PREFIX}/rules`);
+export function fetchClassificationRules(
+  signal?: AbortSignal,
+): Promise<ClassificationRules> {
+  return apiGet<ClassificationRules>(`${CLASSIFICATION_PREFIX}/rules`, signal);
 }
 
 /** Runs classification for one asset and returns the stored result. */
@@ -28,14 +30,21 @@ export function runClassification(assetId: number): Promise<ClassificationResult
 }
 
 /** The most recent classification result for an asset (404 if never run). */
-export function fetchLatestClassification(assetId: number): Promise<ClassificationResult> {
-  return apiGet<ClassificationResult>(`${CLASSIFICATION_PREFIX}/assets/${assetId}/latest`);
+export function fetchLatestClassification(
+  assetId: number,
+  signal?: AbortSignal,
+): Promise<ClassificationResult> {
+  return apiGet<ClassificationResult>(
+    `${CLASSIFICATION_PREFIX}/assets/${assetId}/latest`,
+    signal,
+  );
 }
 
 /** Paginated, newest-first classification history for an asset. */
 export function fetchClassificationHistory(
   assetId: number,
   params?: { page?: number; per_page?: number },
+  signal?: AbortSignal,
 ): Promise<ClassificationResultList> {
   const query = new URLSearchParams();
   if (params?.page !== undefined) query.set("page", String(params.page));
@@ -43,12 +52,19 @@ export function fetchClassificationHistory(
   const qs = query.toString();
   return apiGet<ClassificationResultList>(
     `${CLASSIFICATION_PREFIX}/assets/${assetId}/history${qs ? `?${qs}` : ""}`,
+    signal,
   );
 }
 
 /** Data-quality findings computed for one asset on demand. */
-export function fetchAssetQuality(assetId: number): Promise<AssetQualityReport> {
-  return apiGet<AssetQualityReport>(`${CLASSIFICATION_PREFIX}/assets/${assetId}/quality`);
+export function fetchAssetQuality(
+  assetId: number,
+  signal?: AbortSignal,
+): Promise<AssetQualityReport> {
+  return apiGet<AssetQualityReport>(
+    `${CLASSIFICATION_PREFIX}/assets/${assetId}/quality`,
+    signal,
+  );
 }
 
 /** Paginated quality findings across an institution scope, with filters. */

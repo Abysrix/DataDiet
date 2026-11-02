@@ -12,8 +12,10 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-sm text-slate-600">{description}</p> : null}
+        <h1 className="text-title font-semibold text-ink">{title}</h1>
+        {description ? (
+          <p className="mt-1 max-w-3xl text-body text-ink-secondary">{description}</p>
+        ) : null}
       </div>
       {actions}
     </header>

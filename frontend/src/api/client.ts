@@ -88,14 +88,25 @@ async function throwResponseError(response: Response): Promise<never> {
   throw new ApiError(await readErrorMessage(response), response.status);
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+/**
+ * GETs `path` and returns the parsed response.
+ *
+ * `signal` is transport-only plumbing for request cancellation (see
+ * useApiQuery); it never changes the request URL, method, or response contract.
+ */
+export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method: "GET",
       headers: requestHeaders(),
+      signal,
     });
   } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      // Cancellation is not a connectivity failure; the caller aborted it.
+      throw cause;
+    }
     throw new ApiError(
       `Could not reach the DataDiet API at ${
         BASE_URL || "(dev proxy: /api)"

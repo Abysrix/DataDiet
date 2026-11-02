@@ -14,10 +14,10 @@
  * not implemented.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listRecommendations } from "../api/retention";
-import type { RecommendationItem, RecommendationState } from "../api/types";
+import type { RecommendationItem } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
@@ -27,25 +27,11 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDate } from "../lib/format";
-
-type Tone = "slate" | "indigo" | "emerald" | "sky" | "amber" | "orange" | "rose";
-
-const RECOMMENDATION_TONES: Record<RecommendationState, Tone> = {
-  RETAIN: "emerald",
-  ARCHIVE_RECOMMENDED: "sky",
-  REVIEW_REQUIRED: "amber",
-  DISPOSAL_REVIEW_REQUIRED: "orange",
-  BLOCKED_BY_HOLD: "rose",
-  NO_APPLICABLE_POLICY: "slate",
-};
-
-const SEVERITY_TONES: Record<string, Tone> = {
-  informational: "slate",
-  low: "sky",
-  medium: "amber",
-  high: "orange",
-  blocked: "rose",
-};
+import {
+  toneForRecommendation,
+  toneForReviewStatus,
+  toneForSeverity,
+} from "../lib/semantic";
 
 const RECOMMENDATION_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "All recommendations" },
@@ -79,6 +65,9 @@ const SORT_OPTIONS: Array<{ value: string; label: string }> = [
 
 const PER_PAGE = 20;
 
+/** How long the search box must be idle before the queue is re-queried. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 interface QueueQuery {
   page: number;
   recommendation: string;
@@ -97,32 +86,53 @@ const DEFAULT_QUERY: QueueQuery = {
   search: "",
 };
 
+/**
+ * Returns `value` once it has stopped changing for `delayMs`.
+ *
+ * Search text is typed one character at a time; the queue is queried on the
+ * settled value so a keystroke does not equal a server round-trip.
+ */
+function useSettledValue<T>(value: T, delayMs: number): T {
+  const [settled, setSettled] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+
+  return settled;
+}
+
 export default function Recommendations() {
   const { activeInstitutionId } = useAuth();
   const [query, setQuery] = useState<QueueQuery>(DEFAULT_QUERY);
+  const settledSearch = useSettledValue(query.search, SEARCH_DEBOUNCE_MS);
 
-  const { data, loading, error, refetch } = useApiQuery(() =>
-    listRecommendations({
-      page: query.page,
-      per_page: PER_PAGE,
-      institution_id: activeInstitutionId ?? undefined,
-      recommendation: query.recommendation || undefined,
-      review_status: query.reviewStatus || undefined,
-      severity: query.severity || undefined,
-      sort: query.sort,
-      search: query.search || undefined,
-    }),
+  const { data, loading, error, refetch } = useApiQuery(
+    (signal) =>
+      listRecommendations(
+        {
+          page: query.page,
+          per_page: PER_PAGE,
+          institution_id: activeInstitutionId ?? undefined,
+          recommendation: query.recommendation || undefined,
+          review_status: query.reviewStatus || undefined,
+          severity: query.severity || undefined,
+          sort: query.sort,
+          search: settledSearch || undefined,
+        },
+        signal,
+      ),
+    [
+      query.page,
+      activeInstitutionId,
+      query.recommendation,
+      query.reviewStatus,
+      query.severity,
+      query.sort,
+      settledSearch,
+    ],
   );
-
-  // `useApiQuery` fetches on mount; re-fetch only when the query changes after.
-  const firstRender = useRef(true);
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    refetch();
-  }, [query, refetch]);
 
   function update(patch: Partial<QueueQuery>): void {
     setQuery((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
@@ -305,29 +315,29 @@ function QueueRow({ item }: { item: RecommendationItem }) {
         </div>
       </td>
       <td className="px-5 py-3">
-        <Badge tone={RECOMMENDATION_TONES[item.recommendation]}>
+        <Badge tone={toneForRecommendation(item.recommendation)}>
           {item.recommendation.replaceAll("_", " ")}
         </Badge>
       </td>
       <td className="px-5 py-3">
         {item.severity ? (
-          <Badge tone={SEVERITY_TONES[item.severity] ?? "slate"}>{item.severity}</Badge>
+          <Badge tone={toneForSeverity(item.severity)}>{item.severity}</Badge>
         ) : (
           <span className="text-slate-400">—</span>
         )}
       </td>
       <td className="px-5 py-3">
-        {item.review_status === "decided" ? (
-          <Badge tone="emerald">
-            decided{item.latest_decision ? `: ${item.latest_decision.replaceAll("_", " ")}` : ""}
-          </Badge>
-        ) : (
-          <Badge tone="amber">open</Badge>
-        )}
+        <Badge tone={toneForReviewStatus(item.review_status ?? "open")}>
+          {item.review_status === "decided"
+            ? `decided${
+                item.latest_decision ? `: ${item.latest_decision.replaceAll("_", " ")}` : ""
+              }`
+            : "open"}
+        </Badge>
       </td>
       <td className="px-5 py-3">
         {item.holds_active > 0 ? (
-          <Badge tone="rose">{item.holds_active} active</Badge>
+          <Badge tone="critical">{item.holds_active} active</Badge>
         ) : (
           <span className="text-slate-400">None</span>
         )}

@@ -9,10 +9,10 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { formatBytes, formatDate, humanize } from "../lib/format";
-import { toneForRetentionAction, toneForSensitivity } from "../lib/labels";
+import { toneForRetentionAction, toneForSensitivity } from "../lib/semantic";
 
 export default function DataInventory() {
-  const { data, loading, error, refetch } = useApiQuery(fetchInventory);
+  const { data, loading, error, refetch } = useApiQuery(fetchInventory, []);
 
   return (
     <div>
@@ -89,7 +89,7 @@ function InventoryTable({ records }: { records: InventoryRecord[] }) {
               </td>
               <td className="px-5 py-3 align-top text-slate-600">
                 {record.duplicate_candidate ? (
-                  <Badge tone="amber">Candidate</Badge>
+                  <Badge tone="warning">Candidate</Badge>
                 ) : (
                   <span className="text-slate-400">—</span>
                 )}

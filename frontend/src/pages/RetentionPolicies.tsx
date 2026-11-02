@@ -24,23 +24,17 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDate } from "../lib/format";
-
-type Tone = "slate" | "indigo" | "emerald" | "sky" | "amber" | "orange" | "rose";
-
-const POLICY_STATUS_TONES: Record<string, Tone> = {
-  draft: "slate",
-  approved: "sky",
-  active: "emerald",
-  retired: "amber",
-  inactive: "slate",
-};
+import { toneForPolicyStatus } from "../lib/semantic";
 
 export default function RetentionPolicies() {
   const { activeInstitutionId, has } = useAuth();
-  const { data, loading, error, refetch } = useApiQuery(() =>
-    listPolicies(
-      activeInstitutionId !== null ? { institution_id: activeInstitutionId } : undefined,
-    ),
+  const { data, loading, error, refetch } = useApiQuery(
+    (signal) =>
+      listPolicies(
+        activeInstitutionId !== null ? { institution_id: activeInstitutionId } : undefined,
+        signal,
+      ),
+    [activeInstitutionId],
   );
 
   return (
@@ -275,7 +269,7 @@ function PolicyRow({ policy, onChanged }: { policy: Policy; onChanged: () => voi
         ) : null}
       </td>
       <td className="px-5 py-3">
-        <Badge tone={POLICY_STATUS_TONES[policy.status] ?? "slate"}>{policy.status}</Badge>
+        <Badge tone={toneForPolicyStatus(policy.status)}>{policy.status}</Badge>
       </td>
       <td className="px-5 py-3 text-slate-700">
         {policy.applicable_categories?.length

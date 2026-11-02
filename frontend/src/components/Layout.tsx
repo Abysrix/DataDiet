@@ -19,12 +19,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-5 py-5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent text-body font-bold text-ink-inverse">
           DD
         </span>
         <div>
-          <p className="text-sm font-semibold text-white">DataDiet</p>
-          <p className="text-xs text-slate-400">Data lifecycle &amp; privacy</p>
+          <p className="text-body font-semibold text-ink-inverse">DataDiet</p>
+          <p className="text-meta text-ink-inverse-muted">Data lifecycle &amp; privacy</p>
         </div>
       </div>
 
@@ -37,10 +37,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={({ isActive }) =>
               [
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                "flex items-center gap-3 rounded-control px-3 py-2 text-body transition-colors",
                 isActive
-                  ? "bg-slate-800 font-medium text-white"
-                  : "text-slate-300 hover:bg-slate-800/60 hover:text-white",
+                  ? "bg-inverse-raised font-medium text-ink-inverse"
+                  : "text-ink-inverse-muted hover:bg-inverse-hover hover:text-ink-inverse",
               ].join(" ")
             }
           >
@@ -50,9 +50,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="border-t border-slate-800 px-5 py-4">
+      <div className="border-t border-line-inverse px-5 py-4">
         {user !== null ? <UserPanel user={user} /> : null}
-        <p className="text-xs text-slate-400">
+        <p className="text-meta text-ink-inverse-muted">
           No destructive actions enabled
           <br />
           Archiving and disposal are not implemented
@@ -77,26 +77,26 @@ function UserPanel({ user }: { user: UserProfile }) {
 
   return (
     <div className="mb-3 space-y-2">
-      <p className="truncate text-xs font-medium text-white" title={user.email}>
+      <p className="truncate text-meta font-medium text-ink-inverse" title={user.email}>
         {user.display_name}
       </p>
-      <p className="truncate text-xs text-slate-400" title={user.email}>
+      <p className="truncate text-meta text-ink-inverse-muted" title={user.email}>
         {user.email}
       </p>
-      <p className="text-xs text-slate-400">
+      <p className="text-meta text-ink-inverse-muted">
         {roleLabel}
         {user.is_platform_admin ? " · platform admin" : ""}
       </p>
 
       {canChooseScope ? (
-        <label className="block text-xs text-slate-400">
+        <label className="block text-meta text-ink-inverse-muted">
           <span className="sr-only">Institution scope</span>
           <select
             value={activeInstitutionId === null ? "" : String(activeInstitutionId)}
             onChange={(event) =>
               setActiveInstitution(event.target.value === "" ? null : Number(event.target.value))
             }
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+            className="mt-1 w-full rounded-control border border-line-inverse bg-inverse px-2 py-1.5 text-meta text-ink-inverse focus:border-accent focus:outline-none"
           >
             {user.is_platform_admin ? <option value="">All institutions</option> : null}
             {institutions.map((id) => (
@@ -107,7 +107,7 @@ function UserPanel({ user }: { user: UserProfile }) {
           </select>
         </label>
       ) : (
-        <p className="text-xs text-slate-400">
+        <p className="text-meta text-ink-inverse-muted">
           {activeInstitutionId !== null ? `Institution #${activeInstitutionId}` : "No institution"}
         </p>
       )}
@@ -115,7 +115,7 @@ function UserPanel({ user }: { user: UserProfile }) {
       <button
         type="button"
         onClick={signOut}
-        className="w-full rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white ring-1 ring-slate-700 ring-inset hover:bg-slate-700"
+        className="w-full rounded-control bg-inverse-raised px-3 py-1.5 text-meta font-medium text-ink-inverse ring-1 ring-line-inverse ring-inset hover:bg-inverse-hover"
       >
         Sign out
       </button>
@@ -133,9 +133,9 @@ export default function Layout() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <div className="min-h-full bg-canvas">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 bg-slate-900 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 bg-inverse lg:block">
         <SidebarContent />
       </aside>
 
@@ -143,15 +143,15 @@ export default function Layout() {
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-slate-900/60"
+            className="absolute inset-0 bg-inverse/60"
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-y-0 left-0 w-64 bg-slate-900">
+          <div className="absolute inset-y-0 left-0 w-64 bg-inverse">
             <button
               type="button"
               onClick={() => setMobileNavOpen(false)}
-              className="absolute top-4 right-4 rounded-md p-1 text-slate-300 hover:bg-slate-800 hover:text-white"
+              className="absolute top-4 right-4 rounded-md p-1 text-ink-inverse-muted hover:bg-inverse-raised hover:text-ink-inverse"
               aria-label="Close navigation"
             >
               <IconClose className="h-5 w-5" />
@@ -162,21 +162,21 @@ export default function Layout() {
       ) : null}
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
           <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
             <button
               type="button"
               onClick={() => setMobileNavOpen(true)}
-              className="rounded-md p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+              className="rounded-md p-2 text-ink-secondary hover:bg-surface-hover lg:hidden"
               aria-label="Open navigation"
             >
               <IconMenu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-900">
+              <p className="truncate text-body font-semibold text-ink">
                 {current?.label ?? "DataDiet"}
               </p>
-              <p className="truncate text-xs text-slate-500">
+              <p className="truncate text-meta text-ink-muted">
                 {current?.description ?? "Data lifecycle and privacy management"}
               </p>
             </div>
@@ -188,7 +188,7 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        <footer className="mx-auto max-w-7xl px-4 pb-8 text-xs text-slate-500 sm:px-6 lg:px-8">
+        <footer className="mx-auto max-w-7xl px-4 pb-8 text-meta text-ink-muted sm:px-6 lg:px-8">
           DataDiet prototype. Identity and authorization are verified server-side (ADR-0014);
           archiving, restoration, and disposal are not implemented yet.
         </footer>

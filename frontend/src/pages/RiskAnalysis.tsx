@@ -9,10 +9,10 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Spinner } from "../components/ui/Spinner";
 import { humanize } from "../lib/format";
-import { toneForRiskBand, toneForSensitivity } from "../lib/labels";
+import { toneForRiskBand, toneForSensitivity } from "../lib/semantic";
 
 export default function RiskAnalysis() {
-  const { data, loading, error, refetch } = useApiQuery(fetchRiskAnalysis);
+  const { data, loading, error, refetch } = useApiQuery(fetchRiskAnalysis, []);
 
   return (
     <div>

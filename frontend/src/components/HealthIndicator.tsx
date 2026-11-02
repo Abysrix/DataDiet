@@ -6,7 +6,7 @@ import { useApiQuery } from "../hooks/useApiQuery";
  * even when MySQL is not running.
  */
 export function HealthIndicator() {
-  const { data, loading, error } = useApiQuery(fetchHealth);
+  const { data, loading, error } = useApiQuery(fetchHealth, []);
 
   if (loading) {
     return (
