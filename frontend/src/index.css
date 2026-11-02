@@ -203,6 +203,13 @@
   --spacing-row-y: 0.625rem;
   --spacing-stack: 0.75rem;
 
+  /* --- Breakpoints ------------------------------------------------------
+   * The shell needs a measure change at 1440px, which is between Tailwind's
+   * `xl` (1280px) and `2xl` (1536px). Nothing in this project uses `2xl`, so
+   * the custom `wide:` variant can sit after the defaults without a cascade
+   * conflict. */
+  --breakpoint-wide: 90rem;
+
   /* --- Motion -----------------------------------------------------------
    * Two named animations only; both are neutralised under
    * `prefers-reduced-motion` at the bottom of this file. */

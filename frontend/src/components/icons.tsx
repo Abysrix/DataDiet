@@ -121,6 +121,39 @@ export function IconUsers({ className }: IconProps) {
   );
 }
 
+/** A hold freezes lifecycle work, so it reads as a padlock rather than a clock. */
+export function IconHold({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <rect x="4.5" y="10.5" width="15" height="9.5" rx="2" />
+      <path d="M8 10.5V8a4 4 0 018 0v2.5" />
+      <path d="M12 14v2.5" />
+    </Glyph>
+  );
+}
+
+/** An advisory review queue is a checklist, not another warning sign. */
+export function IconReview({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M4 7.5l1.6 1.6L8.4 6.2" />
+      <path d="M11 8h9" />
+      <path d="M4 14.5l1.6 1.6L8.4 13.2" />
+      <path d="M11 15h9" />
+    </Glyph>
+  );
+}
+
+export function IconLogout({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3" />
+      <path d="M10 8l-4 4 4 4" />
+      <path d="M6 12h9" />
+    </Glyph>
+  );
+}
+
 export function IconMenu({ className }: IconProps) {
   return (
     <Glyph className={className}>

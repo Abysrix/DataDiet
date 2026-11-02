@@ -32,7 +32,7 @@ function ProtectedLayout() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-full items-center justify-center bg-slate-50">
+      <div className="flex min-h-full items-center justify-center bg-canvas">
         <Spinner label="Restoring your session..." />
       </div>
     );
@@ -50,7 +50,7 @@ function SignInRoute() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-full items-center justify-center bg-slate-950">
+      <div className="flex min-h-full items-center justify-center bg-inverse">
         <Spinner label="Loading..." />
       </div>
     );

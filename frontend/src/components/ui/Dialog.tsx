@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "../icons";
 import { IconButton } from "./IconButton";
+import { useOverlayBehavior } from "./overlayBehavior";
 
 export interface DialogProps {
   open: boolean;
@@ -24,24 +25,12 @@ const WIDTHS: Record<NonNullable<DialogProps["width"]>, string> = {
   lg: "max-w-3xl",
 };
 
-const FOCUSABLE = [
-  "button:not([disabled])",
-  "a[href]",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "summary",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
 /**
  * A modal dialog built on the native `role="dialog"` + `aria-modal` contract.
  *
- * Escape and Tab are handled on a document listener rather than on the panel:
- * if focus ever escapes the panel, the trap still works, and Escape still closes
- * the dialog. Focus is moved into the panel when it opens and returned to
- * whatever had it before when it closes, because a keyboard user who tabs into a
- * dialog and closes it must not be dropped at the top of the page.
+ * Focus-in, focus-restore, scroll lock, Escape and the Tab trap come from
+ * `useOverlayBehavior` — the same behaviour the mobile navigation drawer uses,
+ * so the two overlays cannot drift apart.
  */
 export function Dialog({
   open,
@@ -59,70 +48,7 @@ export function Dialog({
   const descriptionId = `${uid}-description`;
   const panelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const previous =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const panel = panelRef.current;
-    const target = initialFocusRef?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel;
-    target?.focus();
-    return () => {
-      if (previous && document.contains(previous)) {
-        previous.focus();
-      }
-    };
-  }, [open, initialFocusRef]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const panel = panelRef.current;
-      if (!panel) {
-        return;
-      }
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (focusables.length === 0) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const atStart = active === null || active === panel || active === first;
-      if (event.shiftKey && atStart) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  useOverlayBehavior({ open, panelRef, onClose, initialFocusRef });
 
   if (!open) {
     return null;
