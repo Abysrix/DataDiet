@@ -1,0 +1,113 @@
+# DataDiet — Floci-AZ (Azure-compatible emulator) as a Render private service.
+#
+# STATUS: PREPARED, NOT DEPLOYED, NOT APPLIED. No Render account, API key,
+# blueprint or cloud resource was created or touched while writing this file.
+# Treat it as a reviewed draft that still needs the two verifications listed in
+# README.md (port binding and health-check behaviour) before anyone deploys it.
+#
+# Why `pserv` and not `web`: a `web` service is publicly reachable on an
+# `onrender.com` subdomain. Floci-AZ's default auth mode accepts any storage
+# account key without validating it, its Queue SAS check is not enforced, and
+# `POST /_admin/reset` wipes all emulator state with no credentials. It must not
+# be a public web service. A private service (`pserv`) has no public subdomain
+# and is reachable only from services in the same Render region and workspace.
+#
+# Deliberately absent: no `/var/run/docker.sock`. Render documents no support
+# for the Docker socket, privileged containers or sidecars, so every Floci-AZ
+# service that spawns containers is disabled below rather than left to fail at
+# runtime. The enabled set is exactly the in-process HTTP-only services.
+#
+# No credentials are stored here or anywhere in this directory. The emulator's
+# `devstoreaccount1` key is the published Azurite well-known development key, is
+# already the default, and is not a secret; it is intentionally not written down
+# in this repository.
+
+services:
+  - type: pserv
+    name: floci-az
+    # Immutable release tag. `latest` and `nightly-*` are moving targets, and a
+    # same-day nightly rerun republishes the same dated tag, so a pinned release
+    # is the only dependable pin. Verified present for linux/amd64 + linux/arm64.
+    image:
+      url: docker.io/floci/floci-az:0.16.0
+    # A persistent disk requires a paid instance type and a private service
+    # cannot scale beyond one instance. 512 MB is the cheapest paid plan; it is
+    # sized up here because the emulator holds blobs in memory as well as on
+    # disk. This choice is a judgement, not a documented requirement.
+    plan: 1c-2g
+    numInstances: 1
+    # MUST equal the region of the service that calls it; private traffic does
+    # not cross regions. Set to whatever the DataDiet backend uses.
+    region: ohio
+    # Image services never auto-redeploy when a tag moves, so `off` costs
+    # nothing: an upgrade here is an intentional commit of a new pinned tag.
+    autoDeployTrigger: off
+    healthCheckPath: /_floci/health
+    disk:
+      name: floci-az-data
+      # Floci-AZ's documented default data directory, and the path the image
+      # declares as a VOLUME. Render requires an absolute mount path and
+      # prohibits /, /opt, /home and /etc; /app/data is allowed and "existing
+      # directories can be used". Only changes under this path survive a
+      # deploy or restart.
+      mountPath: /app/data
+      sizeGB: 1
+    envVar:
+      # Render health checks run against $PORT; Floci-AZ binds the port named by
+      # FLOCI_AZ_PORT (default 4577) and the image EXPOSEs 4577. Setting both to
+      # the same value is the only way to satisfy the two documented behaviours
+      # at once. VERIFY BEFORE DEPLOY: Floci-AZ does not document reading PORT.
+      - key: PORT
+        value: "4577"
+      - key: FLOCI_AZ_PORT
+        value: "4577"
+      # Placeholder, must be replaced with the real internal hostname Render
+      # assigns to the service (shape: <name>-<suffix>, e.g. `floci-az-2k3a`);
+      # clients reach it as http://<that-host>:4577/devstoreaccount1. This value
+      # controls the hostnames embedded in SAS URLs and operation locations, so
+      # a wrong value produces URLs pointing at a host that does not exist.
+      - key: FLOCI_AZ_BASE_URL
+        value: "http://floci-az:4577"
+      # Persistence. `wal` writes every mutation to an append-only log before
+      # responding and compacts into a snapshot every 30s, so a hard kill loses
+      # nothing; Floci-AZ's docs recommend `hybrid` (async flush every 5s) for
+      # ordinary dev use and `memory` for CI. See README.md for the trade-off on
+      # a Render volume. Metadata and payload bytes live together in per-service
+      # files under FLOCI_AZ_STORAGE_PERSISTENT_PATH.
+      - key: FLOCI_AZ_STORAGE_MODE
+        value: "wal"
+      - key: FLOCI_AZ_STORAGE_PERSISTENT_PATH
+        value: "/app/data"
+      # --- Disabled: every service that needs the Docker daemon. Render offers
+      # no Docker socket, so these cannot work and are turned off explicitly.
+      - key: FLOCI_AZ_SERVICES_FUNCTIONS_ENABLED
+        value: "false"
+      - key: FLOCI_AZ_SERVICES_COSMOS_ENABLED
+        value: "false"
+      - key: FLOCI_AZ_SERVICES_SQL_ENABLED
+        value: "false"
+      - key: FLOCI_AZ_SERVICES_EVENT_HUB_ENABLED
+        value: "false"
+      # The web console is a separate container image (floci/floci-ui) and needs
+      # a port of its own.
+      - key: FLOCI_AZ_UI_ENABLED
+        value: "false"
+      # --- Enabled: in-process HTTP-only services. Stated explicitly so a later
+      # reader knows this is a decision, not a default. Blob and Queue are the
+      # priority; Table and Key Vault also run without a socket.
+      - key: FLOCI_AZ_SERVICES_BLOB_ENABLED
+        value: "true"
+      - key: FLOCI_AZ_SERVICES_QUEUE_ENABLED
+        value: "true"
+      - key: FLOCI_AZ_SERVICES_TABLE_ENABLED
+        value: "true"
+      - key: FLOCI_AZ_SERVICES_KEY_VAULT_ENABLED
+        value: "true"
+      - key: FLOCI_AZ_SERVICES_APP_CONFIG_ENABLED
+        value: "false"
+      # --- Security posture. TLS is off because the only path to this service is
+      # Render's private network; enabling FLOCI_AZ_TLS_ENABLED would also open
+      # HTTPS on 4577 and pull in a runtime-generated self-signed CA that every
+      # client would have to trust (retrievable from /_floci/tls-cert).
+      - key: FLOCI_AZ_TLS_ENABLED
+        value: "false"

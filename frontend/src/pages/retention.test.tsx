@@ -178,7 +178,9 @@ describe("RetentionPolicies screen", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /create draft/i })).toBeInTheDocument();
     });
+    // Creating happens in a dialog, so the form is opened before it is submitted.
     await userEvent.click(screen.getByRole("button", { name: /create draft/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Save draft" }));
     expect(await screen.findByText(/policy name is required/i)).toBeInTheDocument();
     expect(createPolicy).not.toHaveBeenCalled();
   });
@@ -195,10 +197,14 @@ describe("RetentionPolicies screen", () => {
       ),
     );
     await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create draft/i })).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole("button", { name: /create draft/i }));
+    await waitFor(() => {
       expect(screen.getByPlaceholderText(/employee records/i)).toBeInTheDocument();
     });
     await userEvent.type(screen.getByPlaceholderText(/employee records/i), "New policy");
-    await userEvent.click(screen.getByRole("button", { name: /create draft/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => {
       expect(createPolicy).toHaveBeenCalledWith(
         expect.objectContaining({ name: "New policy" }),
@@ -252,7 +258,9 @@ describe("Holds screen", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /create hold/i })).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByRole("button", { name: /^create hold$/i }));
+    // Placing a hold happens in a confirmation dialog, so the form is opened first.
+    await userEvent.click(screen.getByRole("button", { name: "Create hold" }));
+    await userEvent.click(screen.getByRole("button", { name: "Place hold" }));
     expect(await screen.findByText(/hold name is required/i)).toBeInTheDocument();
     expect(createHold).not.toHaveBeenCalled();
   });
@@ -262,16 +270,24 @@ describe("Recommendations queue", () => {
   const QUEUE: PaginatedRecommendations = {
     items: [
       {
+        id: 71,
         asset_id: 3,
         asset_title: "Payroll export",
+        institution_id: 1,
         recommendation: "BLOCKED_BY_HOLD",
         rationale: "Active hold prevents disposal.",
         severity: null,
         policy_id: 1,
         policy_version_id: 2,
+        policy_version_number: 3,
         holds_active: 1,
         assessed_at: "2026-10-10T00:00:00",
         findings: null,
+        retention_deadline: null,
+        days_overdue: null,
+        decisions_recorded: 0,
+        review_status: "open",
+        latest_decision: null,
       },
     ],
     total: 1,

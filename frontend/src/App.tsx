@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ClerkBoundary, isClerkEnabled } from "./auth/ClerkBoundary";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -64,7 +65,7 @@ function SignInRoute() {
 }
 
 export default function App() {
-  return (
+  const application = (
     <AuthProvider>
       {/*
         Mounted now, before any page raises one: `ToastProvider` keeps its
@@ -73,28 +74,36 @@ export default function App() {
         and page behaviour are untouched — no page calls `useToast()` yet.
       */}
       <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/signin" element={<SignInRoute />} />
-            <Route element={<ProtectedLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/inventory" element={<DataInventory />} />
-              <Route path="/risk" element={<RiskAnalysis />} />
-              <Route path="/classification" element={<Classification />} />
-              <Route path="/retention" element={<RetentionPolicies />} />
-              <Route path="/holds" element={<Holds />} />
-              <Route path="/recommendations" element={<Recommendations />} />
-              <Route path="/assessments/:assetId" element={<AssetAssessment />} />
-              <Route path="/governance/assets/:assetId" element={<AssetGovernance />} />
-              <Route path="/archive" element={<Archive />} />
-              <Route path="/retrieval" element={<RetrievalRequests />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/users" element={<UserManagement />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <Routes>
+          <Route path="/signin" element={<SignInRoute />} />
+          <Route element={<ProtectedLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/inventory" element={<DataInventory />} />
+            <Route path="/risk" element={<RiskAnalysis />} />
+            <Route path="/classification" element={<Classification />} />
+            <Route path="/retention" element={<RetentionPolicies />} />
+            <Route path="/holds" element={<Holds />} />
+            <Route path="/recommendations" element={<Recommendations />} />
+            <Route path="/assessments/:assetId" element={<AssetAssessment />} />
+            <Route path="/governance/assets/:assetId" element={<AssetGovernance />} />
+            <Route path="/archive" element={<Archive />} />
+            <Route path="/retrieval" element={<RetrievalRequests />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/users" element={<UserManagement />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
       </ToastProvider>
     </AuthProvider>
+  );
+
+  // Inside the router, because Clerk's own components navigate through it. The
+  // choice is made from a build-time constant, so the tree shape is stable: a
+  // build given a Clerk key always mounts the provider, and one that was not
+  // never imports it at runtime.
+  return (
+    <BrowserRouter>
+      {isClerkEnabled() ? <ClerkBoundary>{application}</ClerkBoundary> : application}
+    </BrowserRouter>
   );
 }

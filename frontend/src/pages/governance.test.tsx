@@ -38,13 +38,16 @@ import AssetGovernance from "./AssetGovernance";
 const QUEUE: PaginatedRecommendations = {
   items: [
     {
+      id: 71,
       asset_id: 3,
       asset_title: "Payroll export",
+      institution_id: 1,
       recommendation: "BLOCKED_BY_HOLD",
       rationale: "An active hold prevents disposal.",
       severity: "blocked",
       policy_id: 1,
       policy_version_id: 2,
+      policy_version_number: 3,
       holds_active: 1,
       assessed_at: "2026-10-10T00:00:00",
       findings: null,

@@ -11,10 +11,12 @@
  */
 
 import type {
+  AssetSensitivity,
   ClassificationConfidence,
   DecisionValue,
   FindingSeverity,
   HoldStatus,
+  LifecycleStatus,
   PolicyStatus,
   PolicyVersionStatus,
   Phase3PolicyStatus,
@@ -23,7 +25,6 @@ import type {
   RetentionAction,
   ReviewStatus,
   RiskBand,
-  Sensitivity,
 } from "../api/types";
 import { humanize } from "./format";
 
@@ -74,11 +75,13 @@ export function resolveStatusTone(tone: ToneInput): StatusTone {
   return role === "accent" ? "neutral" : role;
 }
 
-const SENSITIVITY_TONES: Record<Sensitivity, Tone> = {
+const SENSITIVITY_TONES: Record<AssetSensitivity, Tone> = {
   restricted: "critical",
   confidential: "warning",
   internal: "info",
   public: "success",
+  /** An unclassified asset is not a safe asset, but it is not a danger either. */
+  unknown: "neutral",
 };
 
 const RISK_BAND_TONES: Record<RiskBand, Tone> = {
@@ -147,8 +150,25 @@ const REVIEW_STATUS_TONES: Record<ReviewStatus, Tone> = {
   decided: "success",
 };
 
-export function toneForSensitivity(value: Sensitivity): Tone {
+export function toneForSensitivity(value: AssetSensitivity): Tone {
   return SENSITIVITY_TONES[value];
+}
+
+/**
+ * The lifecycle state of an asset as the inventory stores it. `pending_disposal`
+ * is critical for the same reason `eligible_for_disposal` is: it is the state a
+ * human must look at, not a settled one. Nothing in this table executes a
+ * lifecycle action.
+ */
+const LIFECYCLE_STATUS_TONES: Record<LifecycleStatus, Tone> = {
+  active: "success",
+  under_review: "warning",
+  archived: "neutral",
+  pending_disposal: "critical",
+};
+
+export function toneForLifecycleStatus(value: LifecycleStatus): Tone {
+  return LIFECYCLE_STATUS_TONES[value];
 }
 
 export function toneForRiskBand(value: RiskBand): Tone {

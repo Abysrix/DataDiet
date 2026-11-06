@@ -5,9 +5,11 @@ import {
   toneForConfidence,
   toneForDecision,
   toneForHoldStatus,
+  toneForLifecycleStatus,
   toneForPolicyStatus,
   toneForRecommendation,
   toneForReviewStatus,
+  toneForSensitivity,
   toneForSeverity,
   type StatusTone,
   type Tone,
@@ -88,5 +90,21 @@ describe("domain tables", () => {
     expect(toneForConfidence("none")).toBe("neutral");
     expect(toneForReviewStatus("open")).toBe("warning");
     expect(toneForReviewStatus("decided")).toBe("success");
+  });
+
+  it("reads an unclassified asset as neither safe nor dangerous", () => {
+    expect(toneForSensitivity("restricted")).toBe("critical");
+    expect(toneForSensitivity("confidential")).toBe("warning");
+    expect(toneForSensitivity("internal")).toBe("info");
+    expect(toneForSensitivity("public")).toBe("success");
+    expect(toneForSensitivity("unknown")).toBe("neutral");
+  });
+
+  it("maps every lifecycle status the asset schema can hold", () => {
+    expect(toneForLifecycleStatus("active")).toBe("success");
+    expect(toneForLifecycleStatus("under_review")).toBe("warning");
+    expect(toneForLifecycleStatus("archived")).toBe("neutral");
+    // Awaiting disposal is the state a human must look at, so it is not neutral.
+    expect(toneForLifecycleStatus("pending_disposal")).toBe("critical");
   });
 });

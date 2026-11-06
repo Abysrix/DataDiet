@@ -142,6 +142,13 @@ export function getAssessmentHistory(
   );
 }
 
+/**
+ * The queue's query parameters, exactly as `routes/retention.py:439` declares
+ * them. The four range filters are already coerced by FastAPI
+ * (`assessed_from`/`_to` are `datetime`, `deadline_from`/`_to` are `date`), so
+ * they are sent as ISO strings here and applied inclusively in SQL
+ * (`services/retention.py:818-825`) — no client-side comparison anywhere.
+ */
 export function listRecommendations(
   params?: {
     page?: number;
@@ -152,6 +159,10 @@ export function listRecommendations(
     severity?: string;
     sort?: string;
     search?: string;
+    assessed_from?: string;
+    assessed_to?: string;
+    deadline_from?: string;
+    deadline_to?: string;
   },
   signal?: AbortSignal,
 ): Promise<PaginatedRecommendations> {
@@ -166,6 +177,10 @@ export function listRecommendations(
   if (params?.severity) query.set("severity", params.severity);
   if (params?.sort) query.set("sort", params.sort);
   if (params?.search) query.set("search", params.search);
+  if (params?.assessed_from) query.set("assessed_from", params.assessed_from);
+  if (params?.assessed_to) query.set("assessed_to", params.assessed_to);
+  if (params?.deadline_from) query.set("deadline_from", params.deadline_from);
+  if (params?.deadline_to) query.set("deadline_to", params.deadline_to);
   const qs = query.toString();
   return apiGet<PaginatedRecommendations>(
     `${RETENTION_PREFIX}/recommendations${qs ? `?${qs}` : ""}`,

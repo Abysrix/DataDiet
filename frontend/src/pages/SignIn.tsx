@@ -1,5 +1,5 @@
 /**
- * Sign-in (Phase 7, ADR-0014).
+ * Sign-in (Phase 7, ADR-0014; Clerk mode added by Phase 6.0, ADR-0025).
  *
  * The page reports what this deployment *actually* has, straight from the
  * public `GET /auth/config` endpoint, and never pretends otherwise:
@@ -7,6 +7,11 @@
  * - `development`       — a local development sign-in that creates or reuses
  *                         a synthetic account. The server refuses it in
  *                         production, so it can never become production auth.
+ * - `clerk`             — sign-in is Clerk's, rendered by Clerk's own
+ *                         component when this build was given a publishable
+ *                         key. There is no DataDiet form and no pasted token,
+ *                         because a token minted elsewhere would not be what
+ *                         this server verifies.
  * - `bearer_boundary`   — tokens are verified but no identity provider or
  *                         browser sign-in is wired up. A token issued
  *                         elsewhere can be pasted in.
@@ -22,6 +27,9 @@ import { useState } from "react";
 import { fetchAuthConfig } from "../api/auth";
 import type { DevLoginRequest, RoleValue } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { ClerkSignInForm } from "../auth/ClerkBoundary";
+import { useExternalSessionSnapshot } from "../auth/externalSession";
+import type { ExternalSessionSnapshot } from "../auth/externalSession";
 import { useAuth } from "../auth/AuthContext";
 import { toErrorMessage } from "../api/client";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
@@ -36,7 +44,8 @@ const ROLE_OPTIONS: Array<{ value: RoleValue; label: string }> = [
 
 export default function SignIn() {
   const { data: config, loading, error, refetch } = useApiQuery(fetchAuthConfig, []);
-  const { sessionExpired } = useAuth();
+  const { sessionExpired, anonymousReason, signOut } = useAuth();
+  const external = useExternalSessionSnapshot();
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center bg-slate-950 px-4 py-10">
@@ -80,6 +89,13 @@ export default function SignIn() {
         {config !== null && !loading ? (
           config.authentication === "unconfigured" ? (
             <UnconfiguredPanel description={config.description} />
+          ) : config.authentication === "clerk" ? (
+            <ClerkPanel
+              externalState={external.state}
+              reason={anonymousReason}
+              description={config.description}
+              onEndSession={signOut}
+            />
           ) : (
             <div className="space-y-4">
               {config.authentication === "development" ? (
@@ -100,6 +116,105 @@ export default function SignIn() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------ clerk mode -------------------------------- */
+
+/**
+ * Clerk mode, stated honestly for each state the provider can be in.
+ *
+ * Nothing here decides access. An unlinked identity, a deactivated account, or
+ * a DataDiet refusal of any kind stays a refusal — the server's own words are
+ * shown instead of a session that was not granted.
+ */
+function ClerkPanel({
+  externalState,
+  reason,
+  description,
+  onEndSession,
+}: {
+  externalState: ExternalSessionSnapshot["state"];
+  reason: string | null;
+  description: string;
+  onEndSession: () => void;
+}) {
+  if (externalState === "idle") {
+    // The server authenticates through Clerk but this browser build was given no
+    // publishable key: there is no sign-in flow to show, and pretending there is
+    // one would be the fake integration this project forbids.
+    return (
+      <Card>
+        <CardHeader
+          title="Clerk sign-in is not configured in this build"
+          description="This API verifies Clerk session tokens, but the frontend was built without a Clerk publishable key, so there is no sign-in form to render."
+        />
+        <CardBody>
+          <p className="text-sm text-slate-600">
+            Set <code className="font-mono text-xs">VITE_CLERK_PUBLISHABLE_KEY</code> and rebuild
+            the frontend. Clerk&apos;s secret key stays on the server and is never used by this
+            application — nothing secret belongs in the browser bundle.
+          </p>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  if (externalState === "loading") {
+    return (
+      <div className="rounded-xl bg-slate-900 p-8">
+        <Spinner label="Connecting to the identity provider..." />
+      </div>
+    );
+  }
+
+  if (externalState === "signed-out") {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader title="Sign in with Clerk" description={description} />
+          <CardBody>
+            <p className="text-sm text-slate-600">
+              DataDiet stores no passwords and issues no tokens. An administrator links a Clerk
+              identity to a DataDiet account and grants its institution membership; until then the
+              server refuses the session and says why. There is no self-service account creation.
+            </p>
+          </CardBody>
+        </Card>
+        <ClerkSignInForm />
+        <p className="text-center text-xs text-slate-500">
+          Session tokens are minted and refreshed by Clerk. Every request is still verified
+          server-side, and this page never decides identity or permissions on its own.
+        </p>
+      </div>
+    );
+  }
+
+  // Clerk has an active session that DataDiet refused: show the refusal, do not
+  // loop the user back into a sign-in they have already completed.
+  return (
+    <Card>
+      <CardHeader
+        title="Clerk has you signed in; DataDiet has not granted a session"
+        description="Your identity provider verified you, but this account is not linked, is deactivated, or the server could not reach it."
+      />
+      <CardBody className="space-y-4">
+        <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+          {reason ?? "The server did not accept this session."}
+        </p>
+        <p className="text-sm text-slate-600">
+          Nothing was granted locally and nothing will appear until an administrator links your
+          identity to a DataDiet account.
+        </p>
+        <button
+          type="button"
+          onClick={onEndSession}
+          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+        >
+          End this session
+        </button>
+      </CardBody>
+    </Card>
   );
 }
 

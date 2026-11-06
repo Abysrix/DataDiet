@@ -8,3 +8,13 @@ pydantic-settings>=2.7
 SQLAlchemy>=2.0.30
 alembic>=1.13
 PyMySQL>=1.1
+# Phase 6.0 (ADR-0025): PostgreSQL is the staging target. The `+psycopg2` driver
+# suffix in DATABASE_URL selects this package; a bare `postgresql://` URL would
+# make SQLAlchemy import psycopg3 instead, which is not installed.
+psycopg2-binary>=2.9
+# Clerk session-token verification (RS256 + JWKS). The `crypto` extra pulls
+# cryptography, which PyJWT needs to build RSA public keys from JWK material —
+# without it, `jwt.algorithms.RSAAlgorithm.from_jwk` is unavailable and every
+# Clerk token fails closed. Bare PyJWT therefore cannot serve this path.
+# 2.10 is the floor; the verification and JWKS tests were run against 2.15.1.
+PyJWT[crypto]>=2.10
