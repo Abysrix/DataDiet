@@ -78,6 +78,75 @@ export interface InventoryRecord {
   last_reviewed: string | null;
 }
 
+/* ------------------------------------------------------------------------
+ * Inventory: the real asset table (GET /api/v1/assets).
+ * Mirrors backend/app/api/schemas/assets.py — `Asset` and `AssetListResponse`.
+ * The synthetic `/demo/inventory` fixture above is a different, older shape.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * `Asset.sensitivity` widens the four-level scale with `unknown`, which is what
+ * the backend stores for an unclassified asset (`Sensitivity` in
+ * schemas/assets.py is a five-value Literal).
+ */
+export type AssetSensitivity = Sensitivity | "unknown";
+
+/** `LifecycleStatus` Literal in backend/app/api/schemas/assets.py. */
+export type LifecycleStatus = "active" | "under_review" | "archived" | "pending_disposal";
+
+export interface Asset {
+  id: number;
+  institution_id: number | null;
+  data_source_id: number;
+  external_id: string;
+  title: string;
+  description: string | null;
+  record_type: string;
+  category: string | null;
+  source_type: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  size_bytes: number;
+  checksum_sha256: string | null;
+  sensitivity: AssetSensitivity;
+  contains_personal_data: boolean;
+  duplicate_of_id: number | null;
+  owner_team: string | null;
+  owner_email: string | null;
+  lifecycle_status: LifecycleStatus;
+  last_reviewed: string | null;
+  source_created_at: string | null;
+  source_modified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The page of assets the server returned, with its own pagination metadata. */
+export interface AssetListResponse {
+  items: Asset[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+/**
+ * Query parameters accepted by `GET /api/v1/assets`.
+ *
+ * There is deliberately no sort field: the route orders by `updated_at`
+ * descending and exposes no ordering parameter.
+ */
+export interface AssetListQuery {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  category?: string;
+  sensitivity?: AssetSensitivity;
+  source_type?: string;
+  lifecycle_status?: LifecycleStatus;
+  institution_id?: number;
+}
+
 export interface RiskIndicatorView {
   code: string;
   label: string;
@@ -242,23 +311,35 @@ export interface Assessment {
   retention_deadline?: string | null;
 }
 
+/**
+ * Mirrors `RecommendationItem` (`backend/app/api/schemas/retention.py:256`).
+ *
+ * Every field is always serialized: an optional Pydantic field arrives as
+ * `null`, never as `undefined`, so the fields the queue can genuinely leave
+ * empty are `| null` rather than `?`. `id` is the assessment this row is the
+ * latest of — `services/retention.py` returns `ra.id` — and is what a review
+ * decision is recorded against.
+ */
 export interface RecommendationItem {
+  id: number | null;
   asset_id: number;
   asset_title: string | null;
-  institution_id?: number | null;
+  institution_id: number | null;
   recommendation: RecommendationState;
   rationale: string;
   severity: FindingSeverity | null;
   policy_id: number | null;
   policy_version_id: number | null;
+  policy_version_number: number | null;
   holds_active: number;
   assessed_at: string;
   findings: AssessmentFinding[] | null;
-  review_status?: "open" | "decided" | null;
-  latest_decision?: DecisionValue | null;
-  decisions_recorded?: number;
-  retention_deadline?: string | null;
-  days_overdue?: number | null;
+  retention_deadline: string | null;
+  /** Days past `retention_deadline`; negative while the deadline is ahead. */
+  days_overdue: number | null;
+  decisions_recorded: number;
+  review_status: ReviewStatus | null;
+  latest_decision: DecisionValue | null;
 }
 
 export interface PaginatedRecommendations {
@@ -357,6 +438,14 @@ export interface QualityFinding {
   remediation: string;
   duplicate_status?: string | null;
   related_asset_id?: number | null;
+}
+
+/** One entry of `GET /classification/checks`: a documented check and its intent. */
+export interface QualityCheckDescriptor {
+  check: string;
+  severity: QualitySeverity;
+  description: string;
+  remediation: string;
 }
 
 export interface AssetQualityReport {
@@ -552,13 +641,17 @@ export interface AuthConfig {
   environment: string;
   /**
    * - `development` — local dev sign-in is available (never in production).
+   * - `clerk` — session tokens come from Clerk and are verified here with
+   *   RS256; sign-in happens at Clerk, so this API exposes no sign-in form.
    * - `bearer_boundary` — tokens are verified, but no identity provider or
    *   browser sign-in is configured.
    * - `unconfigured` — protected endpoints return 503 until an operator
    *   configures the signing secret.
    */
-  authentication: "development" | "bearer_boundary" | "unconfigured";
+  authentication: "development" | "clerk" | "bearer_boundary" | "unconfigured";
   dev_login_enabled: boolean;
+  /** Which identity provider the server trusts: `clerk`, `local`, or none. */
+  identity_provider: "clerk" | "local" | "none";
   issuer: string;
   audience: string;
   token_ttl_seconds: number;

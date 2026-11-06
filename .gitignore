@@ -40,3 +40,10 @@ npm-debug.log*
 local_storage/
 storage/
 *.local.db
+
+# --- Local scratch artifacts (redesign baseline, 2026-11-01) ---
+# pytest scratch databases under backend/ (test.db, tmp_test*.db, ...)
+backend/*.db
+*.db-journal
+# captured test output at the repo root
+pytest_out.txt

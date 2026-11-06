@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ClerkBoundary, isClerkEnabled } from "./auth/ClerkBoundary";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui/Spinner";
+import { ToastProvider } from "./components/ui/Toast";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import DataInventory from "./pages/DataInventory";
@@ -31,7 +33,7 @@ function ProtectedLayout() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-full items-center justify-center bg-slate-50">
+      <div className="flex min-h-full items-center justify-center bg-canvas">
         <Spinner label="Restoring your session..." />
       </div>
     );
@@ -49,7 +51,7 @@ function SignInRoute() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-full items-center justify-center bg-slate-950">
+      <div className="flex min-h-full items-center justify-center bg-inverse">
         <Spinner label="Loading..." />
       </div>
     );
@@ -63,9 +65,15 @@ function SignInRoute() {
 }
 
 export default function App() {
-  return (
+  const application = (
     <AuthProvider>
-      <BrowserRouter>
+      {/*
+        Mounted now, before any page raises one: `ToastProvider` keeps its
+        `aria-live` region in the tree for the whole session, and a live region
+        that appears with its message is not reliably announced. Routes, layout
+        and page behaviour are untouched — no page calls `useToast()` yet.
+      */}
+      <ToastProvider>
         <Routes>
           <Route path="/signin" element={<SignInRoute />} />
           <Route element={<ProtectedLayout />}>
@@ -85,7 +93,17 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
+  );
+
+  // Inside the router, because Clerk's own components navigate through it. The
+  // choice is made from a build-time constant, so the tree shape is stable: a
+  // build given a Clerk key always mounts the provider, and one that was not
+  // never imports it at runtime.
+  return (
+    <BrowserRouter>
+      {isClerkEnabled() ? <ClerkBoundary>{application}</ClerkBoundary> : application}
+    </BrowserRouter>
   );
 }
