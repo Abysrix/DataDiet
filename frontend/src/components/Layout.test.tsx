@@ -63,6 +63,8 @@ describe("Layout navigation", () => {
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       "Dashboard",
       "Data Inventory",
+      "Connected Sources",
+      "Scan Jobs",
       "Risk Analysis",
       "Classification",
       "Retention Policies",

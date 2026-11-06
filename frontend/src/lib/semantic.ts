@@ -25,6 +25,8 @@ import type {
   RetentionAction,
   ReviewStatus,
   RiskBand,
+  ScanStatus,
+  SourceStatus,
 } from "../api/types";
 import { humanize } from "./format";
 
@@ -205,6 +207,61 @@ export function toneForConfidence(value: ClassificationConfidence): Tone {
 
 export function toneForReviewStatus(value: ReviewStatus): Tone {
   return REVIEW_STATUS_TONES[value];
+}
+
+/**
+ * Whether an operator has enabled a source. `active` is `info`, deliberately not
+ * `success`: the backend sets it at creation without touching the source
+ * (`connectors.py` forces `status="active"`), so it records intent, not a
+ * verified connection. The green that means "checked and reachable" is
+ * `last_validation_ok === true`, which a screen reads separately.
+ */
+const SOURCE_STATUS_TONES: Record<SourceStatus, Tone> = {
+  active: "info",
+  inactive: "neutral",
+};
+
+/**
+ * The six scan states as the service stores them. `PENDING` is a call to action
+ * — it can still be run or cancelled — so it reads as warning, not as a settled
+ * neutral. `COMPLETED_WITH_ERRORS` is caution, not critical: the scan imported
+ * something, and the errors are per-record rows to look at.
+ */
+const SCAN_STATUS_TONES: Record<ScanStatus, Tone> = {
+  PENDING: "warning",
+  RUNNING: "info",
+  COMPLETED: "success",
+  COMPLETED_WITH_ERRORS: "caution",
+  FAILED: "critical",
+  CANCELLED: "neutral",
+};
+
+export function toneForSourceStatus(value: SourceStatus): Tone {
+  return SOURCE_STATUS_TONES[value];
+}
+
+export function toneForScanStatus(value: ScanStatus): Tone {
+  return SCAN_STATUS_TONES[value];
+}
+
+/**
+ * One discovered record's outcome. `ScanResultRead.status` is a free string in
+ * the schema, so an unrecognised value falls back to `neutral` rather than being
+ * dressed up as one of the three the scan service writes.
+ */
+export function toneForScanOutcome(value: string): Tone {
+  if (value === "imported") {
+    return "success";
+  }
+  if (value === "skipped") {
+    return "neutral";
+  }
+  return value === "error" ? "critical" : "neutral";
+}
+
+/** A scan error row's severity: `warning` is a truncation notice, not a failure. */
+export function toneForScanSeverity(value: string): Tone {
+  return value === "warning" ? "caution" : "critical";
 }
 
 /**

@@ -11,6 +11,8 @@ import {
   IconRetrieval,
   IconReview,
   IconRisk,
+  IconScan,
+  IconSources,
   IconUsers,
 } from "./icons";
 
@@ -59,6 +61,22 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Records discovered from sources",
     Icon: IconInventory,
     permission: "inventory:read",
+    group: "discover",
+  },
+  {
+    to: "/sources",
+    label: "Connected Sources",
+    description: "Connector records and their verification",
+    Icon: IconSources,
+    permission: "sources:read",
+    group: "discover",
+  },
+  {
+    to: "/scans",
+    label: "Scan Jobs",
+    description: "Discovery runs and their outcomes",
+    Icon: IconScan,
+    permission: "sources:read",
     group: "discover",
   },
   {

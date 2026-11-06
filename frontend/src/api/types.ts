@@ -615,6 +615,153 @@ export interface GovernanceDetail {
   provenance: GovernanceProvenance;
 }
 
+/* --------------------- sources & scan jobs (Phase 5.8) --------------------- */
+// Mirrors backend/app/api/schemas/connectors.py. Every literal below is the
+// server's own vocabulary: `ConnectorType` accepts exactly two values,
+// `SourceStatus` two, `ScanStatus` six. No field carries a credential — the
+// schema rejects secret-looking `config` keys at write time, and neither a
+// request nor a response ever contains an absolute filesystem path.
+
+/** `ConnectorType`: the only two source kinds the server can build. */
+export type ConnectorType = "synthetic" | "local_folder";
+
+/**
+ * `SourceStatus`: whether the operator has enabled the record, nothing more.
+ * The server sets `active` at creation without touching the source, so this is
+ * not evidence of a live connection — see `Source.last_validation_ok`.
+ */
+export type SourceStatus = "active" | "inactive";
+
+/** `ScanStatus`: the six values the scan service can store. */
+export type ScanStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "COMPLETED_WITH_ERRORS"
+  | "FAILED"
+  | "CANCELLED";
+
+/** `ScanResultRead.status`: how one discovered record fared in a scan. */
+export type ScanResultStatus = "imported" | "skipped" | "error";
+
+/** `ScanErrorRead.severity`: the server only ever writes these two. */
+export type ScanErrorSeverity = "error" | "warning";
+
+/** `Source`: one connected data source configuration record. */
+export interface Source {
+  id: number;
+  institution_id: number | null;
+  name: string;
+  /** Nullable in the response; the list route excludes rows without one. */
+  connector_type: string | null;
+  /** An allow-list key configured by an operator, never a path. */
+  root_key: string | null;
+  config: Record<string, unknown> | null;
+  status: string;
+  created_by: string;
+  /** Written only by `POST /sources/{id}/validate`; null means never validated. */
+  last_validated_at: string | null;
+  last_validation_ok: boolean | null;
+  last_validation_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `PaginatedSources` for `GET /sources`. */
+export interface SourceListResponse {
+  items: Source[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+/** `SourceValidationResult` for `POST /sources/{id}/validate`. */
+export interface SourceValidationResult {
+  id: number;
+  ok: boolean;
+  message: string;
+  validated_at: string | null;
+}
+
+/** `ScanJobRead`: counters are absolute, and there is no percentage field. */
+export interface ScanJob {
+  id: number;
+  data_source_id: number;
+  institution_id: number | null;
+  status: ScanStatus;
+  batch_size: number;
+  total_discovered: number;
+  total_imported: number;
+  total_skipped: number;
+  total_errors: number;
+  /** Set only on a job created by `POST /scan-jobs/{id}/retry`. */
+  retried_from_job_id: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+/** `PaginatedScanJobs` for `GET /scan-jobs`. */
+export interface ScanJobListResponse {
+  items: ScanJob[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+/** `ScanResultRead`: one per-record outcome row written by a scan. */
+export interface ScanResult {
+  id: number;
+  scan_job_id: number;
+  source_key: string;
+  status: string;
+  title: string;
+  record_type: string;
+  category: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  size_bytes: number;
+  sensitivity: string;
+  contains_personal_data: boolean;
+  imported_asset_id: number | null;
+  note: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+/** `PaginatedScanResults` for `GET /scan-jobs/{id}/results`. */
+export interface ScanResultListResponse {
+  items: ScanResult[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+/** `ScanErrorRead`: one error or truncation warning recorded by a scan. */
+export interface ScanError {
+  id: number;
+  scan_job_id: number;
+  source_key: string | null;
+  /** Root-relative POSIX path when the connector could name one; never absolute. */
+  path: string | null;
+  error_message: string;
+  severity: string;
+  created_at: string;
+}
+
+/** `PaginatedScanErrors` for `GET /scan-jobs/{id}/errors`. */
+export interface ScanErrorListResponse {
+  items: ScanError[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
 /* ------------------------- authentication (Phase 7) ------------------------ */
 // Mirrors backend/app/api/schemas/auth.py (ADR-0014). Authorization is always
 // derived server-side from the local user directory; the permissions below are

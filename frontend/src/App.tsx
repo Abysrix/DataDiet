@@ -7,6 +7,8 @@ import { ToastProvider } from "./components/ui/Toast";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import DataInventory from "./pages/DataInventory";
+import Sources from "./pages/Sources";
+import Scans from "./pages/Scans";
 import RiskAnalysis from "./pages/RiskAnalysis";
 import Classification from "./pages/Classification";
 import RetentionPolicies from "./pages/RetentionPolicies";
@@ -79,6 +81,8 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inventory" element={<DataInventory />} />
+            <Route path="/sources" element={<Sources />} />
+            <Route path="/scans" element={<Scans />} />
             <Route path="/risk" element={<RiskAnalysis />} />
             <Route path="/classification" element={<Classification />} />
             <Route path="/retention" element={<RetentionPolicies />} />
