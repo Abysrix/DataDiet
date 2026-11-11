@@ -51,6 +51,29 @@ export function IconInventory({ className }: IconProps) {
   );
 }
 
+export function IconSources({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <rect x="3" y="4" width="18" height="7" rx="1.5" />
+      <rect x="3" y="13" width="18" height="7" rx="1.5" />
+      <path d="M7 7.5h.01" />
+      <path d="M7 16.5h.01" />
+    </Glyph>
+  );
+}
+
+export function IconScan({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" />
+      <path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" />
+      <path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" />
+      <path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" />
+      <path d="M4 12h16" />
+    </Glyph>
+  );
+}
+
 export function IconRisk({ className }: IconProps) {
   return (
     <Glyph className={className}>

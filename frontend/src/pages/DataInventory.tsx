@@ -33,7 +33,14 @@ import {
   TableHeaderCell,
   TableRow,
 } from "../components/ui/Table";
-import { IconChevronLeft, IconChevronRight, IconClose } from "../components/icons";
+import {
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronUp,
+  IconClose,
+  IconFilter,
+} from "../components/icons";
 import { formatBytes, formatDate, humanize } from "../lib/format";
 import { toneForLifecycleStatus, toneForSensitivity } from "../lib/semantic";
 
@@ -156,7 +163,7 @@ export default function DataInventory() {
     <div className="space-y-gutter">
       <PageHeader
         title="Data Inventory"
-        description="Assets recorded in the DataDiet inventory database, read through the asset API. Search and filters are evaluated by the server, so the total below is the number of matching assets, not the rows on this page. This view is read-only: archiving, restoration and disposal are not implemented."
+        description="Every data record DataDiet has found. Search for a record, then open it to see what it holds."
       />
 
       <FilterCard
@@ -175,12 +182,12 @@ export default function DataInventory() {
       {data ? (
         <Card>
           <CardHeader
-            title={`Assets (${data.total})`}
+            title={`Data records (${data.total})`}
             description={`${
               activeInstitutionId === null
                 ? "Every institution this account can read"
-                : `Scoped to Institution #${activeInstitutionId}`
-            }. Ordered by last update, newest first — the ordering the server applies.`}
+                : `Institution #${activeInstitutionId}`
+            } · Newest first`}
             action={
               loading ? (
                 <span role="status" className="text-meta text-ink-muted">
@@ -193,11 +200,11 @@ export default function DataInventory() {
           {data.items.length === 0 ? (
             <CardBody>
               <EmptyState
-                title="No assets match this view"
+                title="No data records match this search"
                 message={
                   filtersActive
-                    ? "No asset in the current institution scope matches these filters. Clear a filter, or change the institution scope in the sidebar, to see more."
-                    : "This scope contains no assets yet. Nothing is scanned automatically, and no source connector has been run."
+                    ? "Nothing in this scope matches what you asked for. Remove a filter, or change the institution scope in the sidebar, to see more."
+                    : "This scope has no data records yet. Sources are scanned from the Scans screen — nothing is scanned on its own."
                 }
               />
             </CardBody>
@@ -218,6 +225,13 @@ export default function DataInventory() {
   );
 }
 
+/**
+ * The one thing this page asks for: a search, then two familiar filters.
+ *
+ * The remaining two are exact-match fields against stored values, which only
+ * make sense once a reader knows the value they are looking for, so they stay
+ * behind a toggle that opens by itself when a link already carries one.
+ */
 function FilterCard({
   query,
   filtersActive,
@@ -229,15 +243,18 @@ function FilterCard({
   onChange: (patch: Partial<InventoryQuery>) => void;
   onClear: () => void;
 }) {
+  const exactMatchActive = query.category !== "" || query.sourceType !== "";
+  const [showExactMatch, setShowExactMatch] = useState(exactMatchActive);
+
   return (
     <Card>
-      <CardHeader
-        title="Find assets"
-        description="Filters are applied by the server. A short pause after typing is treated as the end of the term."
-      />
       <CardBody className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Field label="Search assets" className="sm:col-span-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field
+            label="Search data records"
+            hint="Results update a moment after you stop typing."
+            className="min-w-40 flex-1"
+          >
             {(control) => (
               <Input
                 {...control}
@@ -248,6 +265,29 @@ function FilterCard({
               />
             )}
           </Field>
+          <button
+            type="button"
+            onClick={() => setShowExactMatch((open) => !open)}
+            aria-expanded={showExactMatch}
+            className="mb-1 inline-flex shrink-0 items-center gap-1.5 rounded-control px-3 py-2 text-supporting font-medium text-ink-secondary ring-1 ring-inset ring-line-strong transition-colors hover:bg-surface-hover hover:text-ink"
+          >
+            <IconFilter className="h-4 w-4" />
+            {showExactMatch ? "Hide" : "More filters"}
+            {showExactMatch ? (
+              <IconChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <IconChevronDown className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {filtersActive ? (
+            <Button variant="ghost" size="sm" onClick={onClear} className="mb-1 shrink-0">
+              <IconClose className="h-4 w-4" />
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="Sensitivity">
             {(control) => (
               <Select
@@ -275,7 +315,7 @@ function FilterCard({
                   onChange({ lifecycleStatus: event.target.value as LifecycleStatus | "" })
                 }
               >
-                <option value="">Any lifecycle status</option>
+                <option value="">Any status</option>
                 {LIFECYCLE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -284,34 +324,32 @@ function FilterCard({
               </Select>
             )}
           </Field>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-4">
-          <Field label="Category" hint="Matches the stored value exactly." className="min-w-40 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                value={query.category}
-                onChange={(event) => onChange({ category: event.target.value })}
-                placeholder="hr_records"
-              />
-            )}
-          </Field>
-          <Field label="Source type" hint="Matches the stored value exactly." className="min-w-40 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                value={query.sourceType}
-                onChange={(event) => onChange({ sourceType: event.target.value })}
-                placeholder="hris"
-              />
-            )}
-          </Field>
-          {filtersActive ? (
-            <Button variant="ghost" size="sm" onClick={onClear} className="shrink-0">
-              <IconClose className="h-4 w-4" />
-              Clear filters
-            </Button>
+          {showExactMatch ? (
+            <>
+              <Field
+                label="Category"
+                hint="The exact value stored on a record, such as hr_records."
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={query.category}
+                    onChange={(event) => onChange({ category: event.target.value })}
+                    placeholder="hr_records"
+                  />
+                )}
+              </Field>
+              <Field label="Source type" hint="The exact value stored, such as hris.">
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={query.sourceType}
+                    onChange={(event) => onChange({ sourceType: event.target.value })}
+                    placeholder="hris"
+                  />
+                )}
+              </Field>
+            </>
           ) : null}
         </div>
       </CardBody>
@@ -328,10 +366,10 @@ function FilterCard({
 function LoadingAssets() {
   return (
     <Card>
-      <CardHeader title="Assets" description="Loading the first page from the inventory database." />
+      <CardHeader title="Data records" description="Loading the first page…" />
       <CardBody>
         <span role="status" className="sr-only">
-          Loading assets…
+          Loading data records…
         </span>
         <div aria-hidden="true" className="space-y-4 py-2">
           {[0, 1, 2, 3, 4].map((row) => (
@@ -359,10 +397,10 @@ function AssetTable({
   canOpenGovernance: boolean;
 }) {
   return (
-    <Table caption="Assets in the current inventory view">
+    <Table caption="Data records in the current view">
       <TableHead>
         <TableRow>
-          <TableHeaderCell>Asset</TableHeaderCell>
+          <TableHeaderCell>Record</TableHeaderCell>
           <TableHeaderCell>Sensitivity</TableHeaderCell>
           <TableHeaderCell>Lifecycle</TableHeaderCell>
           <TableHeaderCell className="hidden lg:table-cell">Source</TableHeaderCell>
@@ -439,7 +477,7 @@ function AssetRow({ asset, canOpenGovernance }: { asset: Asset; canOpenGovernanc
         {canOpenGovernance ? (
           <Link
             to={`/governance/assets/${asset.id}`}
-            className="inline-flex items-center gap-1 whitespace-nowrap rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
+            className="relative inline-flex items-center gap-1 whitespace-nowrap rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
           >
             Open
             <IconChevronRight className="h-3.5 w-3.5" />
@@ -482,7 +520,7 @@ function Pagination({
         Previous
       </Button>
       <p className="text-meta text-ink-muted tabular-nums">
-        Page {page} of {pages} · {total} asset{total === 1 ? "" : "s"} matching
+        Page {page} of {pages} · {total} record{total === 1 ? "" : "s"} found
       </p>
       <Button
         variant="secondary"

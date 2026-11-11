@@ -30,10 +30,13 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
+import { Select } from "../components/ui/Select";
 import { Spinner } from "../components/ui/Spinner";
+import { Textarea } from "../components/ui/Textarea";
 import { formatBytes, formatDate, humanize } from "../lib/format";
 import {
   toneForDecision,
@@ -116,30 +119,30 @@ function GovernanceView({ assetId }: { assetId: number }) {
 
 function ProvenanceBanner({ provenance }: { provenance: GovernanceProvenance }) {
   return (
-    <Card className="border-indigo-200 bg-indigo-50/40">
+    <Card className="border-accent-line bg-accent-surface">
       <CardBody>
-        <h2 className="text-xs font-semibold tracking-wide text-indigo-900 uppercase">
+        <h2 className="text-eyebrow font-semibold uppercase text-accent-ink">
           Provenance
         </h2>
-        <dl className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-4">
+        <dl className="mt-2 grid gap-2 text-meta text-ink-secondary sm:grid-cols-4">
           <div>
-            <dt className="font-medium text-slate-500">Observed source metadata</dt>
+            <dt className="font-medium text-ink-muted">Observed source metadata</dt>
             <dd>{provenance.observed.join(", ") || "—"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">System proposals</dt>
+            <dt className="font-medium text-ink-muted">System proposals</dt>
             <dd>{provenance.system_proposed.join(", ") || "none recorded"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">Assessments</dt>
+            <dt className="font-medium text-ink-muted">Assessments</dt>
             <dd>{provenance.assessed.join(", ") || "none recorded"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">Human decisions</dt>
+            <dt className="font-medium text-ink-muted">Human decisions</dt>
             <dd>{provenance.human_decisions.join(", ") || "none recorded"}</dd>
           </div>
         </dl>
-        <p className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-indigo-100 ring-inset">
+        <p className="mt-3 rounded-control bg-surface px-3 py-2 text-meta text-ink-secondary ring-1 ring-accent-line ring-inset">
           File operations: {provenance.file_operations}
         </p>
       </CardBody>
@@ -158,13 +161,13 @@ function AssetCard({ detail }: { detail: GovernanceDetail }) {
         description="Values as recorded from the source. Missing metadata is shown as unknown and never treated as low risk."
       />
       <CardBody>
-        <h3 className="text-base font-semibold text-slate-900">{asset.title}</h3>
+        <h3 className="text-section font-semibold text-ink">{asset.title}</h3>
         {asset.description ? (
-          <p className="mt-1 mb-3 text-sm text-slate-600">{asset.description}</p>
+          <p className="mt-1 mb-3 text-body text-ink-secondary">{asset.description}</p>
         ) : (
           <div className="mb-3" />
         )}
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+        <dl className="grid gap-3 text-body sm:grid-cols-3">
           <Field label="External id" value={asset.external_id} />
           <Field label="Record type" value={asset.record_type} />
           <Field label="Category" value={asset.category ?? "unknown"} />
@@ -198,8 +201,8 @@ function AssetCard({ detail }: { detail: GovernanceDetail }) {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="text-slate-900">{value}</dd>
+      <dt className="font-medium text-ink-muted">{label}</dt>
+      <dd className="text-ink">{value}</dd>
     </div>
   );
 }
@@ -214,7 +217,7 @@ function SourceCard({ detail }: { detail: GovernanceDetail }) {
         title="Source & discovery"
         description="Where the record came from and when it was last observed. Scan results describe discovery, not a file operation."
       />
-      <CardBody className="space-y-3 text-sm">
+      <CardBody className="space-y-3 text-body">
         <dl className="grid gap-3 sm:grid-cols-3">
           <Field label="Data source" value={source.data_source_name ?? "unavailable"} />
           <Field label="Source type" value={source.source_type ?? "unknown"} />
@@ -222,7 +225,7 @@ function SourceCard({ detail }: { detail: GovernanceDetail }) {
         </dl>
 
         {source.notes.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-5 text-xs text-amber-800">
+          <ul className="list-disc space-y-1 pl-5 text-meta text-warning-ink">
             {source.notes.map((note) => (
               <li key={note}>{note}</li>
             ))}
@@ -231,14 +234,14 @@ function SourceCard({ detail }: { detail: GovernanceDetail }) {
 
         {source.mappings.length > 0 ? (
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-body font-semibold text-ink">
               Source-record mappings ({source.mappings.length})
             </h3>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            <ul className="mt-2 divide-y divide-line rounded-control border border-line">
               {source.mappings.map((mapping) => (
                 <li key={mapping.mapping_id} className="px-4 py-2">
-                  <div className="font-mono text-xs text-slate-600">{mapping.source_key}</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="font-mono text-meta text-ink-secondary">{mapping.source_key}</div>
+                  <div className="text-meta text-ink-muted">
                     observed {mapping.observation_count}× · last seen{" "}
                     {mapping.last_seen_at ? formatDate(mapping.last_seen_at.slice(0, 10)) : "unknown"}
                   </div>
@@ -249,15 +252,15 @@ function SourceCard({ detail }: { detail: GovernanceDetail }) {
         ) : null}
 
         {source.latest_scan ? (
-          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-            <span className="font-medium text-slate-900">
+          <div className="rounded-control bg-surface-sunken p-3 text-meta text-ink-secondary">
+            <span className="font-medium text-ink">
               Latest scan #{source.latest_scan.scan_job_id}
             </span>{" "}
             · status {source.latest_scan.status} · discovered {source.latest_scan.total_discovered} ·
             imported {source.latest_scan.total_imported} · skipped {source.latest_scan.total_skipped}
           </div>
         ) : (
-          <p className="text-xs text-slate-500">
+          <p className="text-meta text-ink-muted">
             No discovery run is recorded for this source; the asset may have been created directly.
           </p>
         )}
@@ -283,13 +286,13 @@ function ClassificationCard({ detail }: { detail: GovernanceDetail }) {
             message="No classification proposal has been recorded for this asset. An unclassified asset is an explicit unknown, never a low-risk one."
           />
         ) : (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-body">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="accent">{humanize(result.outcome)}</Badge>
               <Badge tone={result.confidence === "high" ? "success" : "neutral"}>
                 confidence {result.confidence}
               </Badge>
-              <span className="text-xs text-slate-500">
+              <span className="text-meta text-ink-muted">
                 {result.rule_version} · {formatDate(result.classified_at.slice(0, 10))}
               </span>
             </div>
@@ -300,9 +303,9 @@ function ClassificationCard({ detail }: { detail: GovernanceDetail }) {
                 value={humanize(result.proposed_sensitivity)}
               />
             </dl>
-            <p className="text-slate-700">{result.confidence_meaning}</p>
+            <p className="text-ink-secondary">{result.confidence_meaning}</p>
             {result.warnings.length > 0 ? (
-              <p className="text-xs text-amber-800">
+              <p className="text-meta text-warning-ink">
                 {result.warnings.length} warning{result.warnings.length === 1 ? "" : "s"} recorded.
               </p>
             ) : null}
@@ -330,17 +333,17 @@ function QualityCard({ detail }: { detail: GovernanceDetail }) {
             message="Every documented check passed for this asset. That does not prove the metadata is complete or correct."
           />
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <ul className="divide-y divide-line rounded-control border border-line">
             {findings.map((finding, index) => (
               <li key={`${finding.check}-${index}`} className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={toneForSeverity(finding.severity)}>
                     {finding.severity}
                   </Badge>
-                  <span className="font-mono text-xs text-slate-600">{finding.check}</span>
+                  <span className="font-mono text-meta text-ink-secondary">{finding.check}</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-800">{finding.message}</p>
-                <p className="mt-1 text-xs text-slate-500">Remediation: {finding.remediation}</p>
+                <p className="mt-1 text-body text-ink">{finding.message}</p>
+                <p className="mt-1 text-meta text-ink-muted">Remediation: {finding.remediation}</p>
               </li>
             ))}
           </ul>
@@ -367,7 +370,7 @@ function PolicyCard({ detail }: { detail: GovernanceDetail }) {
             message="No active policy matches this asset. Missing policy coverage is an explicit gap: it never authorizes disposal, and retention review is required."
           />
         ) : (
-          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+          <dl className="grid gap-3 text-body sm:grid-cols-3">
             <Field label="Policy" value={`${policy.name} (${policy.status})`} />
             <Field
               label="Version"
@@ -412,32 +415,32 @@ function PolicyCard({ detail }: { detail: GovernanceDetail }) {
 function HoldsCard({ detail }: { detail: GovernanceDetail }) {
   const holds = detail.active_holds;
   return (
-    <Card className={holds.length > 0 ? "border-rose-300" : undefined}>
+    <Card className={holds.length > 0 ? "border-critical-line" : undefined}>
       <CardHeader
         title="Active holds"
         description="A hold overrides incompatible lifecycle recommendations. Releasing a hold never rewrites history."
       />
       <CardBody>
         {holds.length === 0 ? (
-          <p className="text-sm text-slate-600">No active holds block this asset.</p>
+          <p className="text-body text-ink-secondary">No active holds block this asset.</p>
         ) : (
           <div className="space-y-3">
             <div
               role="status"
-              className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900"
+              className="rounded-control border border-critical-line bg-critical-surface px-3 py-2 text-body text-critical-ink"
             >
               {holds.length} active hold{holds.length === 1 ? "" : "s"} block approving any
               lifecycle-advancing recommendation. Retain, request more information, or reject
               remain available.
             </div>
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            <ul className="divide-y divide-line rounded-control border border-line">
               {holds.map((hold) => (
-                <li key={hold.id} className="px-4 py-3 text-sm">
+                <li key={hold.id} className="px-4 py-3 text-body">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={toneForHoldStatus(hold.status)}>{hold.status}</Badge>
-                    <span className="font-medium text-slate-900">{hold.name}</span>
+                    <span className="font-medium text-ink">{hold.name}</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-meta text-ink-muted">
                     {hold.hold_type ?? "hold"}
                     {hold.legal_basis ? ` · ${hold.legal_basis}` : ""}
                     {hold.asset_id === null ? " · institution-wide" : ""}
@@ -486,14 +489,9 @@ function AssessmentCard({
         description="Explainable assessments: each records the policy version, findings, and holds that applied. Re-running stores a new immutable entry."
         action={
           has("retention:assess") ? (
-            <button
-              type="button"
-              onClick={() => void runAssessment()}
-              disabled={running}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
+            <Button loading={running} onClick={() => void runAssessment()}>
               {running ? "Assessing..." : "Run assessment"}
-            </button>
+            </Button>
           ) : null
         }
       />
@@ -513,14 +511,14 @@ function AssessmentCard({
 
         {detail.assessment_history.length > 1 ? (
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-body font-semibold text-ink">
               History ({detail.assessment_history.length})
             </h3>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            <ul className="mt-2 divide-y divide-line rounded-control border border-line">
               {detail.assessment_history.map((assessment, index) => (
                 <li
                   key={`${assessment.assessed_at}-${index}`}
-                  className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-slate-500"
+                  className="flex flex-wrap items-center gap-2 px-4 py-2 text-meta text-ink-muted"
                 >
                   <Badge tone={toneForRecommendation(assessment.recommendation)}>
                     {assessment.recommendation.replaceAll("_", " ")}
@@ -541,16 +539,16 @@ function AssessmentCard({
 
 function AssessmentDetail({ assessment }: { assessment: Assessment }) {
   return (
-    <div className="space-y-3 text-sm">
+    <div className="space-y-3 text-body">
       <div className="flex flex-wrap items-center gap-3">
         <Badge tone={toneForRecommendation(assessment.recommendation)}>
           {assessment.recommendation.replaceAll("_", " ")}
         </Badge>
-        <span className="text-xs text-slate-500">
+        <span className="text-meta text-ink-muted">
           {assessment.rule_set} · assessed {formatDate(assessment.assessed_at.slice(0, 10))}
         </span>
       </div>
-      <p className="text-slate-700">{assessment.rationale}</p>
+      <p className="text-ink-secondary">{assessment.rationale}</p>
       <dl className="grid gap-3 sm:grid-cols-3">
         <Field
           label="Policy version"
@@ -576,16 +574,16 @@ function AssessmentDetail({ assessment }: { assessment: Assessment }) {
         />
       </dl>
       {assessment.findings.length > 0 ? (
-        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        <ul className="divide-y divide-line rounded-control border border-line">
           {assessment.findings.map((finding) => (
             <li key={finding.code} className="px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={toneForSeverity(finding.severity)}>
                   {finding.severity}
                 </Badge>
-                <span className="font-mono text-xs text-slate-600">{finding.code}</span>
+                <span className="font-mono text-meta text-ink-secondary">{finding.code}</span>
               </div>
-              <p className="mt-1 text-sm text-slate-800">{finding.message}</p>
+              <p className="mt-1 text-body text-ink">{finding.message}</p>
             </li>
           ))}
         </ul>
@@ -611,11 +609,11 @@ function DecisionHistoryCard({
       />
       <CardBody>
         {decisions.length === 0 ? (
-          <p className="text-sm text-slate-600">No human decision has been recorded yet.</p>
+          <p className="text-body text-ink-secondary">No human decision has been recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <ul className="divide-y divide-line rounded-control border border-line">
             {decisions.map((decision) => (
-              <li key={decision.id} className="px-4 py-3 text-sm">
+              <li key={decision.id} className="px-4 py-3 text-body">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={toneForDecision(decision.decision)}>
                     {decision.decision.replaceAll("_", " ")}
@@ -624,13 +622,13 @@ function DecisionHistoryCard({
                     <Badge tone="success">Effective</Badge>
                   ) : null}
                   {decision.is_superseded ? <Badge tone="warning">Superseded</Badge> : null}
-                  <span className="text-xs text-slate-500">
+                  <span className="text-meta text-ink-muted">
                     reviewer {decision.reviewer} · {formatDate(decision.decided_at.slice(0, 10))} ·
                     assessment #{decision.assessment_id}
                   </span>
                 </div>
-                <p className="mt-1 text-slate-700">{decision.reason}</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-ink-secondary">{decision.reason}</p>
+                <p className="mt-1 text-meta text-ink-muted">
                   Reviewed recommendation:{" "}
                   {decision.recommendation_reviewed.replaceAll("_", " ")}
                   {decision.policy_version_id !== null
@@ -638,13 +636,13 @@ function DecisionHistoryCard({
                     : ""}
                 </p>
                 {decision.supersedes_decision_id !== null ? (
-                  <p className="mt-1 text-xs text-indigo-700">
+                  <p className="mt-1 text-meta text-accent-ink">
                     Corrects decision #{decision.supersedes_decision_id}; the earlier decision
                     stays in this history.
                   </p>
                 ) : null}
                 {decision.superseded_by_decision_id !== null ? (
-                  <p className="mt-1 text-xs text-amber-800">
+                  <p className="mt-1 text-meta text-warning-ink">
                     Superseded by decision #{decision.superseded_by_decision_id}.
                   </p>
                 ) : null}
@@ -819,7 +817,7 @@ function DecisionForm({
         {conflict ? (
           <div
             role="alert"
-            className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            className="mb-4 rounded-control border border-warning-line bg-warning-surface px-4 py-3 text-body text-warning-ink"
           >
             <p className="font-semibold">
               {conflict.startsWith("stale_review_conflict")
@@ -829,13 +827,9 @@ function DecisionForm({
                   : "Conflict"}
             </p>
             <p className="mt-1">{conflict}</p>
-            <button
-              type="button"
-              onClick={onRecorded}
-              className="mt-3 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-amber-800 ring-1 ring-amber-300 ring-inset hover:bg-amber-100"
-            >
+            <Button variant="secondary" size="sm" className="mt-3" onClick={onRecorded}>
               Reload governance view
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -845,8 +839,8 @@ function DecisionForm({
           </div>
         ) : null}
 
-        <div className="mb-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          <p className="font-medium text-slate-900">
+        <div className="mb-4 rounded-control bg-surface-sunken p-3 text-meta text-ink-secondary">
+          <p className="font-medium text-ink">
             Deciding against assessment #{assessmentId}
           </p>
           <p className="mt-1">
@@ -867,7 +861,7 @@ function DecisionForm({
         {holdsActive > 0 ? (
           <div
             role="status"
-            className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900"
+            className="mb-4 rounded-control border border-critical-line bg-critical-surface px-3 py-2 text-body text-critical-ink"
           >
             {holdsActive} active hold{holdsActive === 1 ? "" : "s"} block approving a
             lifecycle-advancing recommendation for this asset.
@@ -878,54 +872,56 @@ function DecisionForm({
           <div>
             <label
               htmlFor="decision-value"
-              className="block text-xs font-medium text-slate-500"
+              className="block text-meta font-medium text-ink-muted"
             >
               Decision
             </label>
-            <select
-              id="decision-value"
-              value={decision}
-              onChange={(event) => setDecision(event.target.value as DecisionValue)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none sm:max-w-md"
-            >
-              {DECISION_OPTIONS.map((option) => (
-                <option
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.value === "approve_for_later_workflow" && holdsActive > 0}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1 sm:max-w-md">
+              <Select
+                id="decision-value"
+                value={decision}
+                onChange={(event) => setDecision(event.target.value as DecisionValue)}
+              >
+                {DECISION_OPTIONS.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.value === "approve_for_later_workflow" && holdsActive > 0}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           {options.length > 0 ? (
             <div>
               <label
                 htmlFor="decision-supersedes"
-                className="block text-xs font-medium text-slate-500"
+                className="block text-meta font-medium text-ink-muted"
               >
                 Correction
               </label>
-              <select
-                id="decision-supersedes"
-                value={supersedes ?? ""}
-                onChange={(event) => setSupersedes(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none sm:max-w-md"
-              >
-                <option value="">
-                  Independent decision — does not replace any earlier decision
-                </option>
-                {options.map((option) => (
-                  <option key={option.id} value={String(option.id)}>
-                    Supersede decision #{option.id} — {option.decision.replaceAll("_", " ")} on{" "}
-                    {formatDate(option.decided_at.slice(0, 10))} (assessment #
-                    {option.assessment_id})
+              <div className="mt-1 sm:max-w-md">
+                <Select
+                  id="decision-supersedes"
+                  value={supersedes ?? ""}
+                  onChange={(event) => setSupersedes(event.target.value)}
+                >
+                  <option value="">
+                    Independent decision — does not replace any earlier decision
                   </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
+                  {options.map((option) => (
+                    <option key={option.id} value={String(option.id)}>
+                      Supersede decision #{option.id} — {option.decision.replaceAll("_", " ")} on{" "}
+                      {formatDate(option.decided_at.slice(0, 10))} (assessment #
+                      {option.assessment_id})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <p className="mt-1 text-meta text-ink-muted">
                 {supersedesId !== null
                   ? `Superseding decision #${supersedesId}: it stays in the history marked as superseded, and your decision becomes the effective one. A substantive rationale is required.`
                   : "Earlier decisions stay in the history; a superseded decision is marked and points at its replacement."}
@@ -934,31 +930,31 @@ function DecisionForm({
           ) : null}
 
           <div>
-            <label htmlFor="decision-reason" className="block text-xs font-medium text-slate-500">
+            <label htmlFor="decision-reason" className="block text-meta font-medium text-ink-muted">
               Rationale{requiresSubstantiveReason ? " (required)" : ""}
             </label>
-            <textarea
+            <Textarea
               id="decision-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               rows={3}
               aria-invalid={reasonTooShort}
               aria-describedby="decision-reason-help"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+              className="mt-1"
               placeholder="Explain the reasoning behind this decision."
             />
-            <p id="decision-reason-help" className="mt-1 text-xs text-slate-500">
+            <p id="decision-reason-help" className="mt-1 text-meta text-ink-muted">
               {reasonTooShort
                 ? "A rejection, request for more information, or correction needs a substantive rationale (at least 10 characters)."
                 : "Recorded with the decision; it is not copied into the audit log."}
             </p>
           </div>
 
-          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-            <p className="font-medium text-slate-900">Reviewer</p>
+          <div className="rounded-control bg-surface-sunken p-3 text-meta text-ink-secondary">
+            <p className="font-medium text-ink">Reviewer</p>
             <p className="mt-1">
               Recorded as{" "}
-              <span className="font-medium text-slate-900">
+              <span className="font-medium text-ink">
                 {user !== null ? (user.display_name || user.email) : "unknown"}
               </span>
               {user !== null ? ` (${user.email})` : ""}. This identity was verified by the server
@@ -967,13 +963,9 @@ function DecisionForm({
             </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
+          <Button type="submit" loading={submitting} disabled={!canSubmit}>
             {submitting ? "Recording..." : "Record decision"}
-          </button>
+          </Button>
         </form>
       </CardBody>
     </Card>

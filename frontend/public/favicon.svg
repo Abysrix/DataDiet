@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="DataDiet">
+  <rect width="32" height="32" rx="7" fill="#172b35" />
+  <text
+    x="16"
+    y="22"
+    text-anchor="middle"
+    font-family="Inter, Segoe UI, system-ui, sans-serif"
+    font-size="14"
+    font-weight="600"
+    letter-spacing="0.2"
+    fill="#eaf2f0"
+  >
+    DD
+  </text>
+</svg>

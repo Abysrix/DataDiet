@@ -109,7 +109,7 @@ export default function RiskAnalysis() {
     <div>
       <PageHeader
         title="Risk Analysis"
-        description="Privacy and retention exposure for the synthetic sample set, scored by the documented indicator rules and explained indicator by indicator. These are exposure indicators, not a security rating, and they drive no automated decision."
+        description="Exposure indicators for the synthetic sample data, scored by the documented rules and explained one indicator at a time. These are not a security rating, and nothing here triggers an automated action."
       />
 
       {loading ? <LoadingRisk /> : null}

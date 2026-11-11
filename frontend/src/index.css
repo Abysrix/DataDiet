@@ -65,6 +65,15 @@
  * below, and page adoption is a later, per-route phase.
  *
  * Single light theme: dark mode is deliberately not modelled in this phase.
+ *
+ * Palette — deep navy, forest teal, sage, warm ivory, muted amber. The roles are
+ * semantic, not decorative: teal is the only interactive accent, navy carries
+ * headings and the dark panels, warm ivory is the page canvas, white marks the
+ * surfaces selected out of it, sage is a subtle supporting fill, and amber is
+ * reserved for warnings and for capabilities that are planned rather than built.
+ * Contrast is measured, not assumed: every text pairing below clears WCAG AA
+ * (4.5:1) and every status dot, ring and focus bar clears 3:1 against the
+ * surfaces it appears on.
  * ------------------------------------------------------------------------ */
 @theme {
   /* --- Font families ---------------------------------------------------- */
@@ -76,79 +85,85 @@
     monospace;
 
   /* --- Surfaces --------------------------------------------------------- */
-  --color-canvas: #f4f6f9;
+  --color-canvas: #f7f6f1;
   --color-surface: #ffffff;
-  --color-surface-sunken: #eef1f6;
-  --color-surface-hover: #f8fafc;
-  --color-inverse: #0f172a;
-  --color-inverse-raised: #1b2437;
-  --color-inverse-hover: #26324a;
+  --color-surface-sunken: #e6efea;
+  --color-surface-hover: #fbfaf6;
+  --color-inverse: #172b35;
+  --color-inverse-raised: #1e3844;
+  --color-inverse-hover: #27454f;
 
   /* --- Text ------------------------------------------------------------- */
-  --color-ink: #0f172a;
-  --color-ink-secondary: #334155;
-  --color-ink-muted: #64748b;
-  --color-ink-subtle: #94a3b8;
-  --color-ink-inverse: #f1f5f9;
-  --color-ink-inverse-muted: #a9b6cc;
+  --color-ink: #172b35;
+  --color-ink-secondary: #3a4e58;
+  --color-ink-muted: #4e6570;
+  --color-ink-subtle: #586b73;
+  --color-ink-inverse: #eaf2f0;
+  --color-ink-inverse-muted: #a6bdc2;
 
   /* --- Borders and dividers --------------------------------------------- */
-  --color-line: #e3e8ef;
-  --color-line-strong: #cbd5e1;
-  --color-line-inverse: #263248;
+  --color-line: #e4e7df;
+  --color-line-strong: #cbd2c9;
+  --color-line-inverse: #2b4552;
 
   /* --- Interaction, disabled and overlay roles --------------------------
    * A control never invents its own focus colour, disabled fill or scrim:
-   * these are the only names the primitives may use for those states. */
-  --color-focus: #4338ca;
+   * these are the only names the primitives may use for those states.
+   * `accent-on-inverse` exists because forest teal on deep navy measures 2.3:1,
+   * below the 3:1 a focus ring or status mark needs against a dark surface; the
+   * lighter step is used there and nowhere else. */
+  --color-focus: #176b63;
   --color-on-accent: #ffffff;
-  --color-on-accent-muted: #c7d2fe;
-  --color-surface-disabled: #f1f5f9;
-  --color-ink-disabled: #94a3b8;
-  --color-line-disabled: #e2e8f0;
-  --color-overlay: rgb(15 23 42 / 0.55);
+  --color-on-accent-muted: #d2e8e2;
+  --color-surface-disabled: #edefea;
+  --color-ink-disabled: #93a2a8;
+  --color-line-disabled: #e4e7df;
+  --color-overlay: rgb(23 43 53 / 0.55);
 
   /* --- Accent ----------------------------------------------------------- */
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-active: #3730a3;
-  --color-accent-surface: #eef2ff;
-  --color-accent-line: #c7d2fe;
-  --color-accent-ink: #3730a3;
+  --color-accent: #176b63;
+  --color-accent-hover: #135c55;
+  --color-accent-active: #0f4a44;
+  --color-accent-surface: #e6efea;
+  --color-accent-line: #c6dbd1;
+  --color-accent-ink: #0f4a44;
+  --color-accent-on-inverse: #7fc6bc;
 
   /* --- Semantic status roles -------------------------------------------
    * Every role is a quartet: `solid` (bars, dots), `-surface` (fills),
    * `-line` (rings/borders), `-ink` (text). lib/semantic.ts maps domain
-   * values onto these role names — never pick a colour at a call site. */
-  --color-neutral: #64748b;
-  --color-neutral-surface: #f1f5f9;
-  --color-neutral-line: #e2e8f0;
-  --color-neutral-ink: #334155;
+   * values onto these role names — never pick a colour at a call site.
+   * Amber carries "warning" and "planned": `caution` is the same hue pushed
+   * darker so the two stay separable side by side. */
+  --color-neutral: #5c7078;
+  --color-neutral-surface: #edefea;
+  --color-neutral-line: #dce2de;
+  --color-neutral-ink: #3f5560;
 
-  --color-info: #0284c7;
-  --color-info-surface: #f0f9ff;
-  --color-info-line: #bae6fd;
-  --color-info-ink: #075985;
+  --color-info: #2e6c86;
+  --color-info-surface: #e9f1f4;
+  --color-info-line: #c3dce5;
+  --color-info-ink: #1f4c5c;
 
-  --color-success: #059669;
-  --color-success-surface: #ecfdf5;
-  --color-success-line: #a7f3d0;
-  --color-success-ink: #065f46;
+  --color-success: #1f6b4f;
+  --color-success-surface: #e7f3ec;
+  --color-success-line: #bbdcc8;
+  --color-success-ink: #0f5132;
 
-  --color-warning: #d97706;
-  --color-warning-surface: #fffbeb;
-  --color-warning-line: #fde68a;
-  --color-warning-ink: #92400e;
+  --color-warning: #b77935;
+  --color-warning-surface: #faf1e2;
+  --color-warning-line: #e8d3ae;
+  --color-warning-ink: #7a4e1b;
 
-  --color-caution: #ea580c;
-  --color-caution-surface: #fff7ed;
-  --color-caution-line: #fed7aa;
-  --color-caution-ink: #9a3412;
+  --color-caution: #8f5b1f;
+  --color-caution-surface: #f4e7d3;
+  --color-caution-line: #dfc29b;
+  --color-caution-ink: #6b421a;
 
-  --color-critical: #e11d48;
-  --color-critical-surface: #fff1f2;
-  --color-critical-line: #fecdd3;
-  --color-critical-ink: #9f1239;
+  --color-critical: #a93226;
+  --color-critical-surface: #fbedec;
+  --color-critical-line: #efc9c5;
+  --color-critical-ink: #8a2b2b;
 
   /* --- Radius ----------------------------------------------------------- */
   --radius-control: 0.5rem;
@@ -156,16 +171,28 @@
   --radius-overlay: 1rem;
   --radius-pill: 9999px;
 
-  /* --- Shadows ---------------------------------------------------------- */
-  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05);
-  --shadow-raised: 0 8px 20px -8px rgb(15 23 42 / 0.18);
-  --shadow-overlay: 0 24px 48px -16px rgb(15 23 42 / 0.28);
-  --shadow-toast: 0 12px 28px -12px rgb(15 23 42 / 0.24);
+  /* --- Shadows ----------------------------------------------------------
+   * Tinted with the ink hue rather than neutral black, so every elevation
+   * implies the same light source over an ivory canvas. */
+  --shadow-card: 0 1px 2px 0 rgb(23 43 53 / 0.05);
+  --shadow-raised: 0 8px 20px -8px rgb(23 43 53 / 0.18);
+  --shadow-overlay: 0 24px 48px -16px rgb(23 43 53 / 0.28);
+  --shadow-toast: 0 12px 28px -12px rgb(23 43 53 / 0.24);
 
   /* --- Type scale ------------------------------------------------------- */
   --text-display: 1.875rem;
   --text-display--line-height: 2.25rem;
   --text-display--letter-spacing: -0.02em;
+
+  /*
+   * The one marketing step. The public landing page needs a headline larger
+   * than `display`, which is sized for an in-app page title; adding it here
+   * keeps the landing page inside the same scale instead of inventing sizes at
+   * its call sites. Nothing in the authenticated application uses it.
+   */
+  --text-hero: 2.5rem;
+  --text-hero--line-height: 1.1;
+  --text-hero--letter-spacing: -0.025em;
 
   --text-title: 1.5rem;
   --text-title--line-height: 2rem;
@@ -246,6 +273,12 @@ body,
   height: 100%;
 }
 
+/* Anchor navigation on the landing page should arrive rather than jump. The
+   reduced-motion block at the bottom of this file turns this back off. */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   background-color: var(--color-canvas);
@@ -261,6 +294,16 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* The same ring, in the lighter teal step, once it sits on a navy panel: the
+   default accent measures 2.3:1 against `inverse` and would be invisible to the
+   low-vision keyboard user the rule exists for. Keyed off the surface classes
+   rather than per-control so a dark section cannot forget to opt in. */
+.bg-inverse :focus-visible,
+.bg-inverse-raised :focus-visible,
+.bg-inverse-hover :focus-visible {
+  outline-color: var(--color-accent-on-inverse);
 }
 
 @media (prefers-reduced-motion: reduce) {

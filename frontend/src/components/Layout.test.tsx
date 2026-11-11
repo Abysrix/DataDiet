@@ -63,15 +63,17 @@ describe("Layout navigation", () => {
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       "Dashboard",
       "Data Inventory",
+      "Sources",
+      "Scans",
       "Risk Analysis",
       "Classification",
       "Retention Policies",
       "Retention Holds",
       "Review Queue",
-      "Archive",
-      "Retrieval Requests",
       "Reports",
       "User Management",
+      "Archive",
+      "Retrieval Requests",
     ]);
   });
 
@@ -110,10 +112,31 @@ describe("Layout navigation", () => {
     renderLayout();
 
     const nav = screen.getByRole("navigation", { name: /primary/i });
+    expect(nav).toHaveTextContent("Overview");
     expect(nav).toHaveTextContent("Discover");
-    expect(nav).toHaveTextContent("Retain & review");
-    expect(nav).toHaveTextContent("Archive & report");
-    expect(nav).toHaveTextContent("Administer");
+    expect(nav).toHaveTextContent("Govern");
+    expect(nav).toHaveTextContent("Administration");
+    expect(nav).toHaveTextContent("Coming later");
+  });
+
+  it("flags pages that describe work which is not built yet", () => {
+    renderLayout();
+
+    const nav = screen.getByRole("navigation", { name: /primary/i });
+    // Four screens exist as descriptions only; a first-time reader must not
+    // mistake them for features they can use.
+    expect(nav.querySelectorAll("[data-planned]")).toHaveLength(4);
+    expect(within(nav).getByRole("link", { name: /Archive/ })).toHaveTextContent("Not built");
+  });
+
+  it("explains an empty sidebar instead of showing a blank panel", () => {
+    // An account the server granted no permissions sees no navigation rows.
+    renderLayout(testUser({ permissions: [] }));
+
+    const nav = screen.getByRole("navigation", { name: /primary/i });
+    expect(nav).toHaveTextContent("No pages for this account yet");
+    expect(nav).toHaveTextContent("Ask an administrator");
+    expect(within(nav).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("omits a group whose entries are all filtered out", () => {
@@ -124,11 +147,11 @@ describe("Layout navigation", () => {
       visibleNavGroups((permission) => inventoryOnly.permissions.includes(permission)).map(
         (group) => group.label,
       ),
-    ).toEqual(["Discover"]);
+    ).toEqual(["Overview", "Discover"]);
 
     const nav = screen.getByRole("navigation", { name: /primary/i });
     expect(nav).toHaveTextContent("Risk Analysis");
-    expect(nav).not.toHaveTextContent("Administer");
+    expect(nav).not.toHaveTextContent("Administration");
     expect(nav).not.toHaveTextContent("User Management");
   });
 
@@ -178,7 +201,7 @@ describe("Layout navigation", () => {
 
     expect(screen.getByText("Data Pooper")).toBeInTheDocument();
     expect(screen.getByText("d.pooper@example.org")).toBeInTheDocument();
-    expect(screen.getByText(/Admin/)).toBeInTheDocument();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
     expect(screen.getByText(/Institution #1/)).toBeInTheDocument();
   });
 
@@ -246,7 +269,7 @@ describe("Shell landmarks, skip link and header context", () => {
 
     const header = screen.getByRole("banner");
     expect(header).toHaveTextContent("Classification");
-    expect(header).toHaveTextContent("Explainable proposals and data quality");
+    expect(header).toHaveTextContent("Suggested classifications and data quality");
   });
 
   it("falls back to the product name on an unmatched route", () => {

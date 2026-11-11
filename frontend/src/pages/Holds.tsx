@@ -208,7 +208,7 @@ export default function Holds() {
     <div className="space-y-gutter">
       <PageHeader
         title="Retention Holds"
-        description="Legal, audit and administrative holds, read through the retention API. While a hold is active the assessment rules refuse lifecycle-advancing recommendations for the assets it covers. Releasing a hold changes that rule only: no record is archived, restored or deleted here, and the API has no way to return a hold to active."
+        description="Legal, audit and administrative holds. While a hold is active, the assessment rules refuse any recommendation that would advance the lifecycle of the records it covers. Releasing a hold changes only that: nothing is archived, restored or deleted here, and a released hold cannot be returned to active."
         actions={
           canWrite ? (
             <Button onClick={() => setDialog({ kind: "create" })}>Create hold</Button>

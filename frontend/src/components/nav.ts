@@ -11,6 +11,8 @@ import {
   IconRetrieval,
   IconReview,
   IconRisk,
+  IconScan,
+  IconSources,
   IconUsers,
 } from "./icons";
 
@@ -29,42 +31,71 @@ export interface NavItem {
   permission: Permission;
   /** Which sidebar heading the item sits under. Presentation only, never a gate. */
   group: NavGroupId;
+  /**
+   * The page describes work that is not built yet.
+   *
+   * Presentation only: it puts a plain "Not built yet" flag on the row so a
+   * first-time reader never mistakes a description for a feature they can use.
+   */
+  planned?: boolean;
 }
 
-/** Sidebar headings, in the order the lifecycle story is told. */
-export type NavGroupId = "discover" | "govern" | "archive" | "administer";
+/**
+ * Sidebar headings, in the order a new user meets the product.
+ *
+ * The names follow what the user is doing, not the backend's module split:
+ * look at the data, then decide how long to keep it, then manage the account.
+ */
+export type NavGroupId = "overview" | "discover" | "govern" | "administer" | "later";
 
 export const NAV_GROUP_LABELS: Record<NavGroupId, string> = {
+  overview: "Overview",
   discover: "Discover",
-  govern: "Retain & review",
-  archive: "Archive & report",
-  administer: "Administer",
+  govern: "Govern",
+  administer: "Administration",
+  later: "Coming later",
 };
 
-const GROUP_ORDER: NavGroupId[] = ["discover", "govern", "archive", "administer"];
+const GROUP_ORDER: NavGroupId[] = ["overview", "discover", "govern", "administer", "later"];
 
 /** Primary navigation — one entry per DataDiet capability area. */
 export const NAV_ITEMS: NavItem[] = [
   {
     to: "/",
     label: "Dashboard",
-    description: "Lifecycle posture at a glance",
+    description: "What you hold and what needs attention",
     Icon: IconDashboard,
     permission: "inventory:read",
-    group: "discover",
+    group: "overview",
   },
   {
     to: "/inventory",
     label: "Data Inventory",
-    description: "Records discovered from sources",
+    description: "Every data record DataDiet has found",
     Icon: IconInventory,
     permission: "inventory:read",
     group: "discover",
   },
   {
+    to: "/sources",
+    label: "Sources",
+    description: "The systems your records came from",
+    Icon: IconSources,
+    permission: "sources:read",
+    group: "discover",
+  },
+  {
+    to: "/scans",
+    label: "Scans",
+    description: "Discovery runs and what each one found",
+    Icon: IconScan,
+    permission: "sources:read",
+    group: "discover",
+  },
+  {
     to: "/risk",
     label: "Risk Analysis",
-    description: "Explainable sensitivity indicators",
+    description: "Which records look most sensitive",
     Icon: IconRisk,
     permission: "inventory:read",
     group: "discover",
@@ -72,7 +103,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/classification",
     label: "Classification",
-    description: "Explainable proposals and data quality",
+    description: "Suggested classifications and data quality",
     Icon: IconClassification,
     permission: "governance:read",
     group: "govern",
@@ -80,7 +111,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/retention",
     label: "Retention Policies",
-    description: "Versioned policies and holds",
+    description: "How long each kind of data is kept",
     Icon: IconRetention,
     permission: "retention:read",
     group: "govern",
@@ -88,7 +119,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/holds",
     label: "Retention Holds",
-    description: "Legal and administrative holds",
+    description: "Data that must be kept for a legal reason",
     Icon: IconHold,
     permission: "retention:read",
     group: "govern",
@@ -96,42 +127,46 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/recommendations",
     label: "Review Queue",
-    description: "Advisory review queue",
+    description: "Decisions waiting for a person",
     Icon: IconReview,
     permission: "retention:read",
     group: "govern",
   },
   {
-    to: "/archive",
-    label: "Archive",
-    description: "Manifests and integrity checks",
-    Icon: IconArchive,
-    permission: "sources:read",
-    group: "archive",
-  },
-  {
-    to: "/retrieval",
-    label: "Retrieval Requests",
-    description: "Authorized restore workflows",
-    Icon: IconRetrieval,
-    permission: "sources:read",
-    group: "archive",
-  },
-  {
     to: "/reports",
     label: "Reports",
-    description: "Audit logs and exports",
+    description: "Audit logs and compliance exports",
     Icon: IconReports,
     permission: "governance:read",
-    group: "archive",
+    group: "administer",
+    planned: true,
   },
   {
     to: "/users",
     label: "User Management",
-    description: "Roles and approvals directory",
+    description: "Who can see and change what",
     Icon: IconUsers,
     permission: "users:manage",
     group: "administer",
+    planned: true,
+  },
+  {
+    to: "/archive",
+    label: "Archive",
+    description: "Moving data to cold storage",
+    Icon: IconArchive,
+    permission: "sources:read",
+    group: "later",
+    planned: true,
+  },
+  {
+    to: "/retrieval",
+    label: "Retrieval Requests",
+    description: "Asking for archived data back",
+    Icon: IconRetrieval,
+    permission: "sources:read",
+    group: "later",
+    planned: true,
   },
 ];
 

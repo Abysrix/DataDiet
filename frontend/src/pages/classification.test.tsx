@@ -205,10 +205,10 @@ function renderClassification(user: UserProfile | null = testUser(), entry = "/c
 
 /** Load an asset through the id picker; latest/quality/history resolve too. */
 async function loadAsset(id = "3"): Promise<void> {
-  const field = screen.getByLabelText(/asset id/i);
+  const field = screen.getByLabelText(/record id/i);
   await userEvent.clear(field);
   await userEvent.type(field, id);
-  await userEvent.click(screen.getByRole("button", { name: /load asset/i }));
+  await userEvent.click(screen.getByRole("button", { name: /load record/i }));
 }
 
 /** Activate one of the workspace sections. */
@@ -234,7 +234,7 @@ describe("Classification screen", () => {
     await waitFor(() => {
       expect(screen.getByText("classification-v1")).toBeInTheDocument();
     });
-    expect(screen.getByText(/select an asset/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing selected yet/i)).toBeInTheDocument();
     expect(screen.getByText("category-record-type")).toBeInTheDocument();
     expect(screen.getByText(/no signal matched/i)).toBeInTheDocument();
   });
@@ -262,11 +262,11 @@ describe("Classification screen", () => {
       ),
     );
     await waitFor(() => {
-      expect(screen.getByText(/select an asset/i)).toBeInTheDocument();
+      expect(screen.getByText(/choose a record/i)).toBeInTheDocument();
     });
-    await userEvent.type(screen.getByLabelText(/asset id/i), "abc");
-    await userEvent.click(screen.getByRole("button", { name: /load asset/i }));
-    expect(await screen.findByText(/positive integer/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/record id/i), "abc");
+    await userEvent.click(screen.getByRole("button", { name: /load record/i }));
+    expect(await screen.findByText(/positive whole number/i)).toBeInTheDocument();
     expect(fetchLatestClassification).not.toHaveBeenCalled();
   });
 
@@ -465,7 +465,7 @@ describe("asset selection and request lifecycle", () => {
     await waitFor(() => {
       expect(screen.getByText(/asset_not_found/i)).toBeInTheDocument();
     });
-    expect(screen.getByText("Asset not found")).toBeInTheDocument();
+    expect(screen.getByText("Record not found")).toBeInTheDocument();
   });
 
   it("explains an asset outside the caller's institution scope", async () => {
@@ -579,7 +579,7 @@ describe("result currency, evidence and rules", () => {
     renderClassification();
     await loadAsset();
     await waitFor(() => {
-      expect(screen.getByText("Currency unverified")).toBeInTheDocument();
+      expect(screen.getByText("Rule version unknown")).toBeInTheDocument();
     });
     expect(
       screen.getByText(/rule catalogue could not be read, so this result cannot be compared/i),
@@ -659,7 +659,7 @@ describe("result currency, evidence and rules", () => {
       expect(screen.getByText("No evidence")).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/explicit unknown, not a low-risk classification/i),
+      screen.getByText(/that means unknown, not low risk/i),
     ).toBeInTheDocument();
     // The outcome and the absent category both read "Unclassified": no value is invented.
     expect(screen.getAllByText("Unclassified")).toHaveLength(2);
@@ -748,7 +748,7 @@ describe("data quality", () => {
     await loadAsset();
     await waitFor(() => {
       expect(
-        screen.getByText(/1 finding for asset #3\. advisory only/i),
+        screen.getByText(/1 finding for record #3\. advisory only/i),
       ).toBeInTheDocument();
     });
   });
@@ -807,7 +807,7 @@ describe("classification run behaviour", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: /run classification/i }));
     await waitFor(() => {
-      expect(screen.getByText(/recorded the first classification result for asset #3/i)).toBeInTheDocument();
+      expect(screen.getByText(/recorded the first classification result for record #3/i)).toBeInTheDocument();
     });
   });
 
@@ -899,7 +899,7 @@ describe("workspace sections and accessibility", () => {
     mockReadyAsset();
     renderClassification();
     await loadAsset();
-    const latestText = screen.getByText(/the newest stored proposal for asset #3/i);
+    const latestText = screen.getByText(/the newest suggestion for record #3/i);
     expect(latestText).toBeVisible();
     await openSection("History");
     expect(latestText).not.toBeVisible();
@@ -916,7 +916,7 @@ describe("workspace sections and accessibility", () => {
       expect(screen.getByText("Current rule version")).toBeInTheDocument();
     });
     await userEvent.click(screen.getByRole("button", { name: /open full result/i }));
-    expect(screen.getByText(/the newest stored proposal for asset #3/i)).toBeVisible();
+    expect(screen.getByText(/the newest suggestion for record #3/i)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: /compare with the stored history/i }));
     await waitFor(() => {
       expect(screen.getByText(/page 1 of 1 · 2 stored results/i)).toBeVisible();
@@ -932,7 +932,7 @@ describe("workspace sections and accessibility", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: /clear selection/i }));
     await waitFor(() => {
-      expect(screen.getByText(/select an asset/i)).toBeInTheDocument();
+      expect(screen.getByText(/nothing selected yet/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.getByText("category-record-type")).toBeInTheDocument();
@@ -963,7 +963,7 @@ describe("workspace sections and accessibility", () => {
   it("offers no inventory link to an account that cannot read the inventory", async () => {
     renderClassification(testUser({ role: "viewer", permissions: ["governance:read"] }));
     await waitFor(() => {
-      expect(screen.getByText(/select an asset/i)).toBeInTheDocument();
+      expect(screen.getByText(/choose a record/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole("link", { name: /data inventory/i })).not.toBeInTheDocument();
     expect(screen.getByText(/no institution scope is sent|institution_id=/i)).toBeInTheDocument();
