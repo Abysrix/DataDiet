@@ -16,6 +16,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
@@ -106,14 +107,9 @@ function AssessmentRunner({ assetId }: { assetId: number }) {
         title="Current assessment"
         description="Re-running an assessment stores a new history entry; previous entries are preserved even if policies or holds change."
         action={
-          <button
-            type="button"
-            onClick={state.refetch}
-            disabled={state.loading}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
+          <Button loading={state.loading} onClick={state.refetch}>
             {state.loading ? "Assessing..." : "Run assessment"}
-          </button>
+          </Button>
         }
       />
       <CardBody>
@@ -135,28 +131,28 @@ function AssessmentDetail({ assessment }: { assessment: Assessment }) {
           {assessment.recommendation.replaceAll("_", " ")}
         </Badge>
         {assessment.holds_active > 0 ? (
-          <span className="text-sm text-rose-700">
+          <span className="text-body text-critical-ink">
             {assessment.holds_active} active hold
             {assessment.holds_active === 1 ? "" : "s"} block disposal.
           </span>
         ) : null}
-        <span className="text-xs text-slate-500">
+        <span className="text-meta text-ink-muted">
           Rule set {assessment.rule_set} - assessed {formatDate(assessment.assessed_at.slice(0, 10))}
         </span>
       </div>
 
-      <p className="text-sm text-slate-700">{assessment.rationale}</p>
+      <p className="text-body text-ink-secondary">{assessment.rationale}</p>
 
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
+      <dl className="grid gap-3 text-body sm:grid-cols-3">
         <div>
-          <dt className="font-medium text-slate-500">Applicable policy</dt>
-          <dd className="text-slate-900">
+          <dt className="font-medium text-ink-muted">Applicable policy</dt>
+          <dd className="text-ink">
             {assessment.policy_id !== null ? `#${assessment.policy_id}` : "None"}
           </dd>
         </div>
         <div>
-          <dt className="font-medium text-slate-500">Policy version</dt>
-          <dd className="text-slate-900">
+          <dt className="font-medium text-ink-muted">Policy version</dt>
+          <dd className="text-ink">
             {assessment.policy_version_id !== null
               ? `#${assessment.policy_version_id}${
                   assessment.policy_version_number !== null
@@ -167,8 +163,8 @@ function AssessmentDetail({ assessment }: { assessment: Assessment }) {
           </dd>
         </div>
         <div>
-          <dt className="font-medium text-slate-500">Unresolved conditions</dt>
-          <dd className="text-slate-900">
+          <dt className="font-medium text-ink-muted">Unresolved conditions</dt>
+          <dd className="text-ink">
             {assessment.unresolved_conditions.length > 0
               ? assessment.unresolved_conditions.join(", ")
               : "None"}
@@ -193,17 +189,17 @@ function FindingList({ findings }: { findings: AssessmentFinding[] }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-900">Findings ({findings.length})</h3>
-      <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+      <h3 className="text-body font-semibold text-ink">Findings ({findings.length})</h3>
+      <ul className="mt-2 divide-y divide-line rounded-control border border-line">
         {findings.map((finding) => (
           <li key={finding.code} className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
-              <span className="font-mono text-xs text-slate-600">{finding.code}</span>
+              <span className="font-mono text-meta text-ink-secondary">{finding.code}</span>
             </div>
-            <p className="mt-1 text-sm text-slate-800">{finding.message}</p>
+            <p className="mt-1 text-body text-ink">{finding.message}</p>
             {finding.evidence ? (
-              <pre className="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-600">
+              <pre className="mt-2 overflow-x-auto rounded-control bg-surface-sunken p-2 text-meta text-ink-secondary">
                 {JSON.stringify(finding.evidence, null, 2)}
               </pre>
             ) : null}
@@ -235,17 +231,17 @@ function HistoryList({ assessments }: { assessments: Assessment[] }) {
         title={`History (${assessments.length})`}
         description="Historical entries are immutable; they keep the policy version and findings that applied at assessment time."
       />
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-line">
         {assessments.map((assessment, index) => (
           <div key={`${assessment.assessed_at}-${index}`} className="px-5 py-4">
             <div className="flex flex-wrap items-center gap-3">
               <Badge>{assessment.recommendation.replaceAll("_", " ")}</Badge>
-              <span className="text-xs text-slate-500">
+              <span className="text-meta text-ink-muted">
                 {formatDate(assessment.assessed_at.slice(0, 10))} - rule set {assessment.rule_set}
                 {assessment.policy_id !== null ? ` - policy #${assessment.policy_id}` : ""}
               </span>
             </div>
-            <p className="mt-1 text-sm text-slate-700">{assessment.rationale}</p>
+            <p className="mt-1 text-body text-ink-secondary">{assessment.rationale}</p>
           </div>
         ))}
       </div>

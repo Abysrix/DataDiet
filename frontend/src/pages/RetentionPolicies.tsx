@@ -274,7 +274,7 @@ export default function RetentionPolicies() {
     <div className="space-y-gutter">
       <PageHeader
         title="Retention Policies"
-        description="Versioned retention rules, read through the retention API. Policies are governance configuration: they inform advisory assessment recommendations only, and never move, archive or delete an asset."
+        description="Retention rules and the versions they are kept in. A policy only shapes the advice in the review queue: it never moves, archives or deletes a record."
         actions={
           canWrite ? (
             <Button onClick={() => setDialog({ kind: "create" })}>Create draft policy</Button>

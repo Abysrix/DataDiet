@@ -377,21 +377,29 @@ describe("Clerk session integration", () => {
     /** The shell's persistent rail — it exists only under `ProtectedLayout`. */
     const shell = () => screen.queryAllByRole("complementary", { name: /sidebar/i });
 
-    // Signed out at the provider: the only thing shown is Clerk's own form, no
-    // DataDiet chrome is mounted, and no profile request is made in a session
-    // that does not exist.
+    /*
+      `/` is served to anonymous visitors by design (the public landing page),
+      so the guard has to be exercised from a path that is genuinely protected.
+    */
+    window.history.pushState({}, "", "/inventory");
+
+    // Signed out at the provider: the route redirects, the only thing shown is
+    // Clerk's own form, no DataDiet chrome is mounted, and no profile request is
+    // made in a session that does not exist.
     clerk.isSignedIn = false;
     clerk.token = null;
 
     const signedOut = render(<App />);
 
     expect(await screen.findByText("clerk-hosted-sign-in")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/signin");
     expect(shell()).toHaveLength(0);
     expect(fetchMe).not.toHaveBeenCalled();
     signedOut.unmount();
 
     // Signed in at the provider but refused by the server: the refusal is the
     // screen, not the application.
+    window.history.pushState({}, "", "/inventory");
     clerk.isSignedIn = true;
     clerk.token = "clerk.session.token";
     fetchMe.mockRejectedValue(
@@ -408,6 +416,7 @@ describe("Clerk session integration", () => {
 
     // Verified by the server: the application mounts and reads its identity from
     // `/auth/me`, never from Clerk's session object.
+    window.history.pushState({}, "", "/inventory");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ items: [], total: 0 }));
     fetchMe.mockReset();
     fetchMe.mockResolvedValue(testUser({ email: "linked@example.org" }));
@@ -420,5 +429,8 @@ describe("Clerk session integration", () => {
     expect(screen.queryByText("clerk-hosted-sign-in")).not.toBeInTheDocument();
     expect(fetchMe).toHaveBeenCalledTimes(1);
     granted.unmount();
+
+    // Leave the document at the landing page for any later test in this file.
+    window.history.pushState({}, "", "/");
   });
 });

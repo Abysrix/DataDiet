@@ -30,7 +30,7 @@ function cardByTitle(name: RegExp): HTMLElement {
 
 /** The metrics panel: a named region, so its entries can be read as a set. */
 function ledger(): HTMLElement {
-  return screen.getByRole("region", { name: "Summary metrics" });
+  return screen.getByRole("region", { name: "What data do we have?" });
 }
 
 /** One ledger entry, so its value and its hint can be read together. */
@@ -70,12 +70,55 @@ describe("Dashboard", () => {
   it("renders summary figures from the API envelope", async () => {
     await renderDashboard();
 
-    expect(within(metric("Inventory records")).getByText("14")).toBeInTheDocument();
-    expect(within(metric("Pending approvals")).getByText("3")).toBeInTheDocument();
+    expect(within(metric("Data records")).getByText("14")).toBeInTheDocument();
+    expect(within(metric("Waiting for approval")).getByText("3")).toBeInTheDocument();
     expect(within(ledger()).queryByText("Duplicate candidates")).toBeNull();
     expect(
       screen.getByText("Retention policy v3 draft created (synthetic)."),
     ).toBeInTheDocument();
+  });
+
+  it("answers the three questions in order and names one next step", async () => {
+    await renderDashboard();
+
+    const sections = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(sections.slice(0, 3)).toEqual([
+      "What should I do next?",
+      "What data do we have?",
+      "What needs attention?",
+    ]);
+    expect(
+      screen.getByRole("link", { name: /review 3 items waiting for approval/i }),
+    ).toHaveAttribute("href", "/recommendations");
+  });
+
+  it("offers browsing when nothing waits for a decision", async () => {
+    await renderDashboard(mockSummary({ pending_approvals: 0 }));
+
+    expect(screen.getByRole("link", { name: /browse your data records/i })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
+  });
+
+  it("does not offer a next step the account cannot open", async () => {
+    await renderDashboard(mockSummary(), testUser({ permissions: ["inventory:read"] }));
+
+    expect(screen.queryByRole("link", { name: /waiting for approval/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /check data quality/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /browse your data records/i })).toBeInTheDocument();
+  });
+
+  it("keeps the supporting distributions behind one disclosure", async () => {
+    await renderDashboard();
+
+    const disclosure = screen.getByText("Show the numbers behind this summary").closest("details");
+    expect(disclosure).not.toBeNull();
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure).toHaveTextContent("Sensitivity mix");
+    expect(disclosure).toHaveTextContent("Suggested retention action");
   });
 
   it("requests the same dashboard endpoint it did before the redesign", async () => {
@@ -146,14 +189,14 @@ describe("Dashboard", () => {
   it("folds the two elevated risk bands into one headline figure", async () => {
     await renderDashboard();
 
-    expect(within(metric("High or Critical risk")).getByText("8")).toBeInTheDocument();
-    expect(metric("High or Critical risk")).toHaveTextContent(/of 14 risk-banded records/i);
+    expect(within(metric("High-risk records")).getByText("8")).toBeInTheDocument();
+    expect(metric("High-risk records")).toHaveTextContent(/of 14 scored records/i);
   });
 
   it("states risk band counts and shares as text", async () => {
     await renderDashboard();
 
-    const card = cardByTitle(/risk band distribution/i);
+    const card = cardByTitle(/where the risk sits/i);
     expect(within(card).getByText("Critical (75–100)")).toBeInTheDocument();
     expect(within(card).getByText("21%")).toBeInTheDocument();
     expect(within(card).getAllByText("36%")).toHaveLength(2);
@@ -168,37 +211,37 @@ describe("Dashboard", () => {
       }),
     );
 
-    const card = cardByTitle(/risk band distribution/i);
+    const card = cardByTitle(/where the risk sits/i);
     expect(within(card).getAllByText("50%")).toHaveLength(2);
-    expect(card).toHaveTextContent(/shares are of the 10 risk-banded records/i);
+    expect(card).toHaveTextContent(/shares are of the 10 scored records/i);
   });
 
   it("hides the decorative risk bar from assistive technology", async () => {
     await renderDashboard(mockSummary({ by_risk_band: { low: 0, moderate: 5, high: 5, critical: 4 } }));
 
-    const card = cardByTitle(/risk band distribution/i);
+    const card = cardByTitle(/where the risk sits/i);
     const bar = card.querySelector('div[aria-hidden="true"]');
     expect(bar).not.toBeNull();
     expect(bar?.children).toHaveLength(3);
   });
 
-  it("says so when no record is risk-banded", async () => {
+  it("says so when no record has a risk score", async () => {
     await renderDashboard(mockSummary({ by_risk_band: { low: 0, moderate: 0, high: 0, critical: 0 } }));
 
-    const card = cardByTitle(/risk band distribution/i);
-    expect(within(card).getByText(/no records are risk-banded/i)).toBeInTheDocument();
+    const card = cardByTitle(/where the risk sits/i);
+    expect(within(card).getByText(/no records have a risk score/i)).toBeInTheDocument();
     expect(within(card).getAllByText("—")).toHaveLength(4);
   });
 
   it("links attention items to the areas the account may already see", async () => {
     await renderDashboard();
 
-    const card = cardByTitle(/attention required/i);
-    expect(within(card).getByRole("link", { name: /duplicate candidates/i })).toHaveAttribute(
+    const card = cardByTitle(/outstanding items/i);
+    expect(within(card).getByRole("link", { name: /possible duplicates/i })).toHaveAttribute(
       "href",
       "/inventory",
     );
-    expect(within(card).getByRole("link", { name: /marked for review/i })).toHaveAttribute(
+    expect(within(card).getByRole("link", { name: /suggested for review/i })).toHaveAttribute(
       "href",
       "/recommendations",
     );
@@ -212,10 +255,10 @@ describe("Dashboard", () => {
     const inventoryOnly: Permission[] = ["inventory:read"];
     await renderDashboard(mockSummary(), testUser({ permissions: inventoryOnly }));
 
-    const card = cardByTitle(/attention required/i);
-    expect(within(card).getByRole("link", { name: /duplicate candidates/i })).toBeInTheDocument();
-    expect(within(card).queryByRole("link", { name: /marked for review/i })).toBeNull();
-    expect(within(card).getByText("Marked for review")).toBeInTheDocument();
+    const card = cardByTitle(/outstanding items/i);
+    expect(within(card).getByRole("link", { name: /possible duplicates/i })).toBeInTheDocument();
+    expect(within(card).queryByRole("link", { name: /suggested for review/i })).toBeNull();
+    expect(within(card).getByText("Suggested for review")).toBeInTheDocument();
     expect(within(card).queryByRole("link", { name: /open retrieval requests/i })).toBeNull();
     expect(within(card).getByText("5")).toBeInTheDocument();
   });
@@ -229,11 +272,11 @@ describe("Dashboard", () => {
       }),
     );
 
-    const card = cardByTitle(/attention required/i);
-    expect(within(card).queryByText("Duplicate candidates")).toBeNull();
-    expect(within(card).queryByText("Marked eligible for disposal")).toBeNull();
+    const card = cardByTitle(/outstanding items/i);
+    expect(within(card).queryByText("Possible duplicates")).toBeNull();
+    expect(within(card).queryByText("Marked ready for disposal")).toBeNull();
     expect(within(card).queryByText("Open retrieval requests")).toBeNull();
-    expect(within(card).getByText("Marked for review")).toBeInTheDocument();
+    expect(within(card).getByText("Suggested for review")).toBeInTheDocument();
   });
 
   it("says so when nothing at all is outstanding", async () => {
@@ -245,17 +288,17 @@ describe("Dashboard", () => {
       }),
     );
 
-    expect(cardByTitle(/attention required/i)).toHaveTextContent(/nothing outstanding/i);
+    expect(cardByTitle(/outstanding items/i)).toHaveTextContent(/nothing is waiting for you/i);
   });
 
   it("shows the sensitivity and action mixes with their own labels", async () => {
     await renderDashboard();
 
-    const sensitivity = cardByTitle(/sensitivity distribution/i);
+    const sensitivity = cardByTitle(/sensitivity mix/i);
     expect(within(sensitivity).getByText("Restricted")).toBeInTheDocument();
     expect(within(sensitivity).getByText("14 records")).toBeInTheDocument();
 
-    const actions = cardByTitle(/recommended action mix/i);
+    const actions = cardByTitle(/suggested retention action/i);
     expect(within(actions).getByText("Eligible for disposal")).toBeInTheDocument();
     expect(actions).toHaveTextContent(/no retention engine runs yet/i);
   });
@@ -274,6 +317,6 @@ describe("Dashboard", () => {
   it("says so when the sample set has recorded no activity", async () => {
     await renderDashboard(mockSummary({ recent_activity: [] }));
 
-    expect(cardByTitle(/recent activity/i)).toHaveTextContent(/no lifecycle events/i);
+    expect(cardByTitle(/recent activity/i)).toHaveTextContent(/no events have been recorded/i);
   });
 });

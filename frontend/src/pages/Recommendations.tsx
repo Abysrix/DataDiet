@@ -331,7 +331,7 @@ export default function Recommendations() {
     <div className="space-y-gutter">
       <PageHeader
         title="Review Queue"
-        description="Each asset's latest retention assessment, read through the retention API. A recommendation is the engine's conclusion, not an instruction: nothing here archives, restores or deletes a file, and recording a decision endorses a recommendation for a later, separately authorized workflow only. Search, filters and paging are evaluated by the server."
+        description="One row per data record: the engine's latest retention advice. Recording a decision only endorses a recommendation for a later, separately authorized workflow — nothing here archives, restores or deletes a file."
       />
 
       {outcome ? (
@@ -455,11 +455,20 @@ function FilterCard({
   onChange: (patch: Partial<QueueQuery>) => void;
   onClear: () => void;
 }) {
+  const advancedActive =
+    query.sort !== DEFAULT_QUERY.sort ||
+    query.assessedFrom !== "" ||
+    query.assessedTo !== "" ||
+    query.deadlineFrom !== "" ||
+    query.deadlineTo !== "";
+
+  const [showAdvanced, setShowAdvanced] = useState(advancedActive);
+
   return (
     <Card>
       <CardHeader
         title="Find recommendations"
-        description="Every control below is a parameter on the queue request, so the counts and rows that come back are the server's own. A short pause after typing is treated as the end of the search term."
+        description="Search by one of the four common filters here; sorting and date ranges are under More filters. Every control is a parameter on the queue request, so the rows that come back are the server's own. A short pause after typing is treated as the end of the search term."
       />
       <CardBody className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -535,75 +544,90 @@ function FilterCard({
               </Select>
             )}
           </Field>
-          <Field label="Sort by" hint="The two orders the queue route implements.">
-            {(control) => (
-              <Select
-                {...control}
-                value={query.sort}
-                onChange={(event) => onChange({ sort: event.target.value })}
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <Field
-            label="Assessed on or after"
-            hint="Inclusive lower bound on the assessment timestamp, sent as 00:00:00 of the chosen day."
-          >
-            {(control) => (
-              <Input
-                {...control}
-                type="date"
-                value={query.assessedFrom}
-                onChange={(event) => onChange({ assessedFrom: event.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            label="Assessed on or before"
-            hint="Inclusive upper bound, sent as 23:59:59 of the chosen day so the whole day is covered."
-          >
-            {(control) => (
-              <Input
-                {...control}
-                type="date"
-                value={query.assessedTo}
-                onChange={(event) => onChange({ assessedTo: event.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            label="Retention deadline on or after"
-            hint="Inclusive lower bound on the retention deadline; an assessment that stored no deadline is excluded whenever a deadline bound is set."
-          >
-            {(control) => (
-              <Input
-                {...control}
-                type="date"
-                value={query.deadlineFrom}
-                onChange={(event) => onChange({ deadlineFrom: event.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            label="Retention deadline on or before"
-            hint="Inclusive upper bound, sent as the bare date because this parameter is a date rather than a timestamp."
-          >
-            {(control) => (
-              <Input
-                {...control}
-                type="date"
-                value={query.deadlineTo}
-                onChange={(event) => onChange({ deadlineTo: event.target.value })}
-              />
-            )}
-          </Field>
+          <div className="sm:col-span-2 xl:col-span-4">
+            <details
+              open={showAdvanced}
+              onToggle={(event) => setShowAdvanced(event.currentTarget.open)}
+              className="rounded-card border border-line bg-surface-sunken px-card-x py-row-y"
+            >
+              <summary className="cursor-pointer text-supporting font-medium text-ink-secondary">
+                More filters
+              </summary>
+              <p className="mt-1 text-meta text-ink-muted">
+                Sort order and date ranges. Everything here is a parameter on the same queue
+                request, so the rows that come back are the server's own.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <Field label="Sort by" hint="The two orders the queue route implements.">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={query.sort}
+                      onChange={(event) => onChange({ sort: event.target.value })}
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field
+                  label="Assessed on or after"
+                  hint="Inclusive lower bound on the assessment timestamp, sent as 00:00:00 of the chosen day."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="date"
+                      value={query.assessedFrom}
+                      onChange={(event) => onChange({ assessedFrom: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Assessed on or before"
+                  hint="Inclusive upper bound, sent as 23:59:59 of the chosen day so the whole day is covered."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="date"
+                      value={query.assessedTo}
+                      onChange={(event) => onChange({ assessedTo: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Retention deadline on or after"
+                  hint="Inclusive lower bound on the retention deadline; an assessment that stored no deadline is excluded whenever a deadline bound is set."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="date"
+                      value={query.deadlineFrom}
+                      onChange={(event) => onChange({ deadlineFrom: event.target.value })}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Retention deadline on or before"
+                  hint="Inclusive upper bound, sent as the bare date because this parameter is a date rather than a timestamp."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="date"
+                      value={query.deadlineTo}
+                      onChange={(event) => onChange({ deadlineTo: event.target.value })}
+                    />
+                  )}
+                </Field>
+              </div>
+            </details>
+          </div>
         </div>
         {filtersActive ? (
           <Button variant="ghost" size="sm" onClick={onClear}>

@@ -749,7 +749,7 @@ describe("creating a source record", () => {
     expect(banner).toHaveTextContent('Source "Payroll drop" (id 41)');
     expect(banner).toHaveTextContent("without contacting anything");
     expect(banner).toHaveTextContent("Connection never checked");
-    expect(banner).toHaveTextContent(/start a scan from the Scan Jobs screen/i);
+    expect(banner).toHaveTextContent(/start a scan from the Scans page/i);
     expect(screen.queryByRole("dialog", { name: "Add source record" })).not.toBeInTheDocument();
     await waitFor(() => expect(listSources).toHaveBeenCalledTimes(1));
   });

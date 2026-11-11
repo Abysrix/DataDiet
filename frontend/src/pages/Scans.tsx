@@ -278,8 +278,8 @@ export default function Scans() {
   return (
     <div className="space-y-gutter">
       <PageHeader
-        title="Scan Jobs"
-        description="Discovery runs, read through the scan API. A scan starts when it is asked for and finishes before the server answers, so the status, counters and timestamps below are the recorded outcome of a completed run — not a live view. Nothing here is scheduled, retried automatically, or run in the background."
+        title="Scans"
+        description="A scan starts only when someone asks for it and finishes before the server answers, so each row below is a completed run — this is not a live view. Nothing is scheduled or retried automatically."
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">

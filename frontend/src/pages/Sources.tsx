@@ -34,7 +34,7 @@
  * - A source belonging to another institution answers **404**, not 403 — the
  *   route hides other tenants' existence deliberately. An empty list and a
  *   refused scope are therefore different facts and are never merged.
- * - Scan jobs are not managed here. Discovery runs on the Scan Jobs screen,
+ * - Scans are not managed here. Discovery runs on the Scans page,
  *   which owns `POST /sources/{id}/scans`.
  */
 
@@ -510,7 +510,7 @@ export default function Sources() {
                 `"${source.status}", which the server sets without contacting anything. ` +
                 `${connectionSentence(source)}. Validate it to find out whether the ` +
                 "configuration actually reaches the source, then start a scan from the " +
-                "Scan Jobs screen. Created by " +
+                "Scans page. Created by " +
                 `${source.created_by || "the account the server recorded"}.`,
             });
             refetch();
@@ -1405,7 +1405,7 @@ function DetailsDialog({ source, onClose }: { source: Source; onClose: () => voi
           a record is written, so this view can display it without a masking step — and no field of
           a source is a credential. There is no history endpoint: an earlier value of a field, or
           who changed it, is not something the API returns. Scan jobs for this source are listed on
-          the Scan Jobs screen.
+          the Scans page.
         </p>
       </div>
     </Dialog>

@@ -84,11 +84,11 @@ async function renderInventory(user = testUser()): Promise<void> {
       user,
     ),
   );
-  await screen.findByRole("heading", { name: /^Assets \(/ });
+  await screen.findByRole("heading", { name: /^Data records \(/ });
 }
 
 function searchBox(): HTMLElement {
-  return screen.getByRole("searchbox", { name: "Search assets" });
+  return screen.getByRole("searchbox", { name: "Search data records" });
 }
 
 beforeEach(() => {
@@ -137,7 +137,7 @@ describe("asset request", () => {
         </MemoryRouter>,
       ),
     );
-    await screen.findByRole("heading", { name: /^Assets \(/ });
+    await screen.findByRole("heading", { name: /^Data records \(/ });
 
     await userEvent.click(screen.getByRole("button", { name: "scope 2" }));
 
@@ -193,10 +193,26 @@ describe("asset request", () => {
     });
   });
 
+  it("keeps the exact-match filters behind one control", async () => {
+    listAssets.mockResolvedValue(makePage([makeAsset()]));
+    await renderInventory();
+
+    // Two familiar filters are always in view; the two that need a stored
+    // value are not, until the reader asks for them.
+    expect(screen.queryByRole("textbox", { name: /Category/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Source type/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /More filters/i }));
+
+    expect(screen.getByRole("textbox", { name: /Category/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Source type/i })).toBeInTheDocument();
+  });
+
   it("sends the exact-match category and lifecycle filters", async () => {
     listAssets.mockResolvedValue(makePage([makeAsset()]));
     await renderInventory();
 
+    await userEvent.click(screen.getByRole("button", { name: /More filters/i }));
     await userEvent.type(
       screen.getByRole("textbox", { name: /Category/i }),
       "hr_records",
@@ -249,7 +265,7 @@ describe("asset results", () => {
     listAssets.mockResolvedValue(makePage([makeAsset()]));
     await renderInventory();
 
-    const table = screen.getByRole("table", { name: "Assets in the current inventory view" });
+    const table = screen.getByRole("table", { name: "Data records in the current view" });
     const row = within(table).getByRole("row", { name: /Payroll export/ });
 
     expect(within(row).getByText("Payroll export")).toBeInTheDocument();
@@ -275,8 +291,8 @@ describe("asset results", () => {
     );
     await renderInventory();
 
-    expect(screen.getByRole("heading", { name: "Assets (41)" })).toBeInTheDocument();
-    expect(screen.getByText("Page 1 of 3 · 41 assets matching")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Data records (41)" })).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 3 · 41 records found")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(3); // header + two rows
   });
 
@@ -342,8 +358,8 @@ describe("asset results", () => {
     listAssets.mockResolvedValue(makePage([]));
     await renderInventory();
 
-    expect(screen.getByText("No assets match this view")).toBeInTheDocument();
-    expect(screen.getByText(/This scope contains no assets yet/)).toBeInTheDocument();
+    expect(screen.getByText("No data records match this search")).toBeInTheDocument();
+    expect(screen.getByText(/This scope has no data records yet/)).toBeInTheDocument();
   });
 
   it("distinguishes an empty result from an empty database once a filter is set", async () => {
@@ -357,7 +373,7 @@ describe("asset results", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Clear a filter, or change the institution scope/),
+        screen.getByText(/Remove a filter, or change the institution scope/),
       ).toBeInTheDocument();
     });
   });
@@ -385,7 +401,7 @@ describe("request states", () => {
       ),
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Loading assets…");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading data records…");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
 
     resolvePage(makePage([makeAsset()]));
@@ -471,13 +487,13 @@ describe("responsive presentation", () => {
     listAssets.mockResolvedValue(makePage([makeAsset()]));
     await renderInventory();
 
-    const header = screen.getByRole("row", { name: /Asset Sensitivity Lifecycle/ });
+    const header = screen.getByRole("row", { name: /Record Sensitivity Lifecycle/ });
     const cells = within(header).getAllByRole("columnheader");
     const className = (name: string) =>
       cells.find((cell) => cell.textContent === name)?.className ?? "";
 
     // Always present: an asset is identifiable on a phone.
-    expect(className("Asset")).not.toContain("hidden");
+    expect(className("Record")).not.toContain("hidden");
     expect(className("Sensitivity")).not.toContain("hidden");
     expect(className("Lifecycle")).not.toContain("hidden");
 
@@ -488,6 +504,6 @@ describe("responsive presentation", () => {
     expect(className("Updated")).toContain("hidden xl:table-cell");
 
     // Still one table with a caption, never a grid of divs.
-    expect(screen.getByRole("table", { name: "Assets in the current inventory view" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Data records in the current view" })).toBeInTheDocument();
   });
 });

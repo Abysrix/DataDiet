@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchDashboard } from "../api/demo";
@@ -64,7 +65,7 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Inventory volume, sensitivity mix, explainable risk bands, and lifecycle activity across all discovered records."
+        description="What you hold, what needs attention, and what to do next."
       />
 
       {loading ? <Spinner label="Loading dashboard summary…" /> : null}
@@ -106,61 +107,169 @@ function DashboardContent({ summary }: { summary: DashboardSummary }) {
 
   return (
     <div className="space-y-gutter">
-      <MetricLedger
-        metrics={[
-          {
-            label: "Inventory records",
-            value: summary.total_records,
-            hint: "Discovered sample records",
-          },
-          {
-            label: "Storage tracked",
-            value: formatBytes(summary.storage_bytes),
-            hint: `Summed across ${summary.total_records} record${summary.total_records === 1 ? "" : "s"}`,
-          },
-          {
-            label: "High or Critical risk",
-            value: elevatedRisk,
-            hint: `Of ${riskTotal} risk-banded records`,
-          },
-          {
-            label: "Pending approvals",
-            value: summary.pending_approvals,
-            hint: "Human decisions required",
-          },
-        ]}
-      />
+      <NextStep summary={summary} />
 
-      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
-        <RiskOverview bands={riskBands} total={riskTotal} className="xl:col-span-3 xl:self-start" />
-        <AttentionRequired summary={summary} className="xl:col-span-2" />
-      </div>
+      <Section title="What data do we have?">
+        <MetricLedger
+          metrics={[
+            {
+              label: "Data records",
+              value: summary.total_records,
+              hint: "Found by DataDiet",
+              to: "/inventory",
+              permission: "inventory:read",
+            },
+            {
+              label: "Total size",
+              value: formatBytes(summary.storage_bytes),
+              hint: `Across ${summary.total_records} record${summary.total_records === 1 ? "" : "s"}`,
+            },
+            {
+              label: "High-risk records",
+              value: elevatedRisk,
+              hint: `Of ${riskTotal} scored records`,
+              to: "/risk",
+              permission: "inventory:read",
+            },
+            {
+              label: "Waiting for approval",
+              value: summary.pending_approvals,
+              hint: "A person needs to decide",
+              to: "/recommendations",
+              permission: "retention:read",
+            },
+          ]}
+        />
+      </Section>
 
-      <div className="grid grid-cols-1 gap-gutter md:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Sensitivity distribution"
-            description="Records by assigned sensitivity level"
-            action={<DistributionTotal total={sensitivityTotal} />}
+      <Section title="What needs attention?">
+        <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
+          <AttentionRequired summary={summary} className="xl:col-span-3" />
+          <RiskOverview
+            bands={riskBands}
+            total={riskTotal}
+            className="xl:col-span-2 xl:self-start"
           />
-          <CardBody>
-            <BarList items={sensitivityItems} />
-          </CardBody>
-        </Card>
+        </div>
+      </Section>
 
-        <Card>
-          <CardHeader
-            title="Recommended action mix"
-            description="Illustrative sample values — no retention engine runs yet"
-          />
-          <CardBody>
-            <BarList items={actionItems} />
-          </CardBody>
-        </Card>
-      </div>
+      <details className="rounded-card border border-line bg-surface">
+        <summary className="cursor-pointer px-card-x py-3 text-body font-medium text-ink-secondary transition-colors hover:text-ink">
+          Show the numbers behind this summary
+        </summary>
+        <div className="border-t border-line p-gutter">
+          <div className="grid grid-cols-1 gap-gutter md:grid-cols-2">
+            <Card>
+              <CardHeader
+                title="Sensitivity mix"
+                description="Records by assigned sensitivity level"
+                action={<DistributionTotal total={sensitivityTotal} />}
+              />
+              <CardBody>
+                <BarList items={sensitivityItems} />
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Suggested retention action"
+                description="Illustrative sample values — no retention engine runs yet"
+              />
+              <CardBody>
+                <BarList items={actionItems} />
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      </details>
 
       <ActivityCard activity={summary.recent_activity} />
     </div>
+  );
+}
+
+/** A visible section title that is also the region's accessible name. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const id = `dashboard-section-${title.replace(/\W+/g, "-").toLowerCase()}`;
+  return (
+    <section aria-labelledby={id} className="space-y-3">
+      <h2 id={id} className="text-section font-semibold text-ink">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * The one action this page recommends.
+ *
+ * "Waiting for approval" is only a number until the reader knows where to take
+ * it, so the band names the next screen and says what is waiting there. Its
+ * links exist only for areas this account can already open — the same rule the
+ * sidebar and the outstanding list follow.
+ */
+function NextStep({ summary }: { summary: DashboardSummary }) {
+  const { has } = useAuth();
+
+  const primary =
+    summary.pending_approvals > 0 && has("retention:read")
+      ? {
+          to: "/recommendations",
+          label: `Review ${summary.pending_approvals} item${summary.pending_approvals === 1 ? "" : "s"} waiting for approval`,
+          hint: "Each one says what it covers and why DataDiet flagged it.",
+        }
+      : {
+          to: "/inventory",
+          label: "Browse your data records",
+          hint: "See everything DataDiet has found, and narrow it to what matters.",
+        };
+
+  const options: Array<{ to: string; label: string; permission: Permission }> = [
+    { to: "/risk", label: "See which records look most sensitive", permission: "inventory:read" },
+    {
+      to: "/classification",
+      label: "Check data quality and suggestions",
+      permission: "governance:read",
+    },
+    { to: "/retention", label: "Review how long data is kept", permission: "retention:read" },
+  ];
+  const shortcuts = options.filter((item) => has(item.permission));
+
+  return (
+    <section
+      aria-labelledby="dashboard-next-step"
+      className="rounded-card border border-accent-line bg-accent-surface px-card-x py-card-y"
+    >
+      <h2 id="dashboard-next-step" className="text-eyebrow font-semibold uppercase text-accent-ink">
+        What should I do next?
+      </h2>
+      <div className="mt-2 flex flex-wrap items-center gap-4">
+        <Link
+          to={primary.to}
+          className="inline-flex items-center gap-2 rounded-control bg-accent px-control-x py-control-y text-body font-medium text-on-accent transition-colors hover:bg-accent-hover"
+        >
+          {primary.label}
+          <IconChevronRight className="h-4 w-4 shrink-0" />
+        </Link>
+        <p className="min-w-40 flex-1 text-supporting text-ink-secondary">{primary.hint}</p>
+      </div>
+      {shortcuts.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-x-gutter gap-y-1">
+          {shortcuts.map((item) => (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                className="inline-flex items-center gap-1 rounded-control text-supporting font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
+              >
+                {item.label}
+                <IconChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -176,34 +285,57 @@ function DistributionTotal({ total }: { total: number }) {
  * The volume figures in one hairline-divided panel rather than four cards: the
  * numbers are read together, so they are framed together. A `<dl>` keeps each
  * label bound to its value, which four loose `<div>`s would not announce.
+ *
+ * An entry is a link only when the signed-in account may already open that
+ * area, so a number is also a way through — never a dead end.
  */
 function MetricLedger({
   metrics,
 }: {
-  metrics: Array<{ label: string; value: string | number; hint: string }>;
+  metrics: Array<{
+    label: string;
+    value: string | number;
+    hint: string;
+    to?: string;
+    permission?: Permission;
+  }>;
 }) {
+  const { has } = useAuth();
+
   return (
-    <section
-      aria-labelledby="dashboard-metrics"
-      className="overflow-hidden rounded-card border border-line bg-line shadow-card"
-    >
-      <h2 id="dashboard-metrics" className="sr-only">
-        Summary metrics
-      </h2>
-      <dl className="grid grid-cols-1 gap-px sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
+    <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card sm:grid-cols-2 xl:grid-cols-4">
+      {metrics.map((metric) => {
+        // Only a figure this account may already open becomes a link.
+        const linkTo =
+          metric.to !== undefined && metric.permission !== undefined && has(metric.permission)
+            ? metric.to
+            : undefined;
+
+        return (
           <div key={metric.label} className="bg-surface px-card-x py-card-y">
-            <dt className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-ink-muted">
-              {metric.label}
-            </dt>
+            <dt className="text-eyebrow font-semibold uppercase text-ink-muted">{metric.label}</dt>
+            {/*
+              The number carries the link rather than the whole panel: a `dl`
+              entry may only hold `dt` and `dd`, and the figure is what the
+              reader wants to follow through to the screen behind it.
+            */}
             <dd className="mt-2 text-display font-semibold tabular-nums text-ink">
-              {metric.value}
+              {linkTo !== undefined ? (
+                <Link
+                  to={linkTo}
+                  className="rounded-sm transition-colors hover:text-accent hover:underline"
+                >
+                  {metric.value}
+                </Link>
+              ) : (
+                metric.value
+              )}
             </dd>
             <dd className="mt-1 text-meta text-ink-muted">{metric.hint}</dd>
           </div>
-        ))}
-      </dl>
-    </section>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -220,19 +352,7 @@ function RiskOverview({
 
   return (
     <Card className={className}>
-      <CardHeader
-        title="Risk band distribution"
-        description="From documented indicator rules (rule set v1)"
-        action={
-          <Link
-            to="/risk"
-            className="inline-flex items-center gap-1 rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
-          >
-            View risk analysis
-            <IconChevronRight className="h-3.5 w-3.5" />
-          </Link>
-        }
-      />
+      <CardHeader title="Where the risk sits" description="Records by risk score, highest first" />
       <CardBody className="space-y-4">
         {/*
           The bar is decoration for the legend below it, so it is hidden from
@@ -253,12 +373,10 @@ function RiskOverview({
             ))}
           </div>
         ) : (
-          <p className="text-supporting text-ink-muted">
-            No records are risk-banded in this summary.
-          </p>
+          <p className="text-supporting text-ink-muted">No records have a risk score yet.</p>
         )}
 
-        <ul className="grid grid-cols-1 gap-x-gutter gap-y-2 sm:grid-cols-2">
+        <ul className="space-y-2">
           {bands.map((band) => (
             <li key={band.label} className="flex items-baseline justify-between gap-3">
               <span className="flex min-w-0 items-center gap-2 text-body text-ink-secondary">
@@ -276,9 +394,18 @@ function RiskOverview({
           ))}
         </ul>
 
-        <p className="text-meta text-ink-subtle">
-          Shares are of the {total} risk-banded record{total === 1 ? "" : "s"} in this summary.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-meta text-ink-subtle">
+            Shares are of the {total} scored record{total === 1 ? "" : "s"} in this summary.
+          </p>
+          <Link
+            to="/risk"
+            className="inline-flex shrink-0 items-center gap-1 rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
+          >
+            Open risk analysis
+            <IconChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </CardBody>
     </Card>
   );
@@ -305,15 +432,15 @@ function AttentionRequired({
   const candidates: AttentionRow[] = [
     {
       key: "duplicates",
-      label: "Duplicate candidates",
-      hint: "Flagged for review, never auto-deleted",
+      label: "Possible duplicates",
+      hint: "Nothing is deleted automatically",
       value: summary.duplicate_candidates,
       to: "/inventory",
       permission: "inventory:read",
     },
     {
       key: "review",
-      label: "Marked for review",
+      label: "Suggested for review",
       hint: "Sample values, not engine recommendations",
       value: summary.by_retention_action.review,
       to: "/recommendations",
@@ -321,7 +448,7 @@ function AttentionRequired({
     },
     {
       key: "disposal",
-      label: "Marked eligible for disposal",
+      label: "Marked ready for disposal",
       hint: "Advisory only — disposal is not implemented",
       value: summary.by_retention_action.eligible_for_disposal,
       to: "/recommendations",
@@ -330,7 +457,7 @@ function AttentionRequired({
     {
       key: "retrieval",
       label: "Open retrieval requests",
-      hint: "Authorized restore workflows",
+      hint: "Restoring archived data is not built yet",
       value: summary.open_retrieval_requests,
       to: "/retrieval",
       permission: "sources:read",
@@ -340,14 +467,11 @@ function AttentionRequired({
 
   return (
     <Card className={className}>
-      <CardHeader
-        title="Attention required"
-        description="Outstanding items in the synthetic sample set"
-      />
+      <CardHeader title="Outstanding items" description="In the synthetic sample set" />
       <CardBody className="p-0">
         {rows.length === 0 ? (
           <p className="px-card-x py-card-y text-supporting text-ink-muted">
-            Nothing outstanding in this summary.
+            Nothing is waiting for you in this summary.
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -402,30 +526,29 @@ function AttentionRequired({
 function ActivityCard({ activity }: { activity: DashboardSummary["recent_activity"] }) {
   return (
     <Card>
-      <CardHeader title="Recent activity" description="Latest synthetic lifecycle events" />
+      <CardHeader title="Recent activity" description="Latest events in the sample set" />
       <CardBody className="p-0">
         {activity.length === 0 ? (
           <p className="px-card-x py-card-y text-supporting text-ink-muted">
-            No lifecycle events have been recorded in the sample set.
+            No events have been recorded in the sample set.
           </p>
         ) : (
           <ol className="divide-y divide-line">
             {activity.map((item) => (
               <li
                 key={item.event_id}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-card-x py-3"
+                className="grid grid-cols-1 gap-x-3 gap-y-1 px-card-x py-3 sm:grid-cols-[7rem_1fr]"
               >
-                <time
-                  dateTime={item.occurred_on}
-                  className="w-24 shrink-0 text-meta tabular-nums text-ink-muted"
-                >
+                <time dateTime={item.occurred_on} className="text-meta tabular-nums text-ink-muted">
                   {formatDate(item.occurred_on)}
                 </time>
-                <Badge tone="neutral">{humanize(item.event_type)}</Badge>
-                <span className="w-full min-w-0 text-body text-ink-secondary sm:w-auto sm:flex-1">
-                  {item.description}
-                </span>
-                <span className="text-meta text-ink-subtle">{item.actor}</span>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-baseline gap-2 text-body text-ink-secondary">
+                    <Badge tone="neutral">{humanize(item.event_type)}</Badge>
+                    <span className="min-w-0 flex-1">{item.description}</span>
+                  </p>
+                  <p className="mt-1 text-meta text-ink-subtle">{item.actor}</p>
+                </div>
               </li>
             ))}
           </ol>

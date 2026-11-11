@@ -61,6 +61,7 @@ function NavRow({
       onClick={onNavigate}
       aria-current={isPage ? "page" : isCurrent ? "true" : undefined}
       title={item.description}
+      data-planned={item.planned ? "" : undefined}
       className={[
         "relative flex items-center gap-2.5 rounded-control py-2 pl-3 pr-2.5 text-body transition-colors",
         isCurrent
@@ -76,6 +77,11 @@ function NavRow({
       ) : null}
       <Icon className="h-4.5 w-4.5 shrink-0" />
       <span className="truncate">{item.label}</span>
+      {item.planned ? (
+        <span className="ml-auto shrink-0 text-eyebrow font-medium uppercase tracking-wide text-ink-inverse-muted">
+          Not built
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -177,27 +183,50 @@ function SidebarContent({
       </div>
 
       <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <ul className="space-y-4">
-          {groups.map((group) => (
-            <li key={group.id}>
-              <p className="px-3 pb-1.5 text-eyebrow font-semibold uppercase tracking-wide text-ink-inverse-muted">
-                {group.label}
-              </p>
-              <ul className="space-y-0.5">
-                {group.items.map((item) => (
-                  <li key={item.to}>
-                    <NavRow
-                      item={item}
-                      isCurrent={current === item.to}
-                      isPage={location.pathname === item.to}
-                      onNavigate={onNavigate}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
+        {groups.length === 0 ? (
+          /*
+            A narrow permission set filters the list down to nothing. Saying so
+            is more useful than an empty panel: the user learns the account can
+            sign in, and what to ask for next.
+          */
+          <div className="space-y-2 px-3 py-4 text-meta text-ink-inverse-muted">
+            <p className="font-semibold text-ink-inverse">No pages for this account yet</p>
+            <p>
+              You are signed in, but this account has not been given access to any DataDiet area.
+              Ask an administrator for the access you need, then reload this page.
+            </p>
+            <p>The dashboard, inventory and governance pages appear here once access is granted.</p>
+          </div>
+        ) : (
+          <ul className="space-y-4">
+            {groups.map((group) => (
+              <li
+                key={group.id}
+                role="group"
+                aria-labelledby={`nav-group-${group.id}`}
+              >
+                <p
+                  id={`nav-group-${group.id}`}
+                  className="px-3 pb-1.5 text-eyebrow font-semibold uppercase tracking-wide text-ink-inverse-muted"
+                >
+                  {group.label}
+                </p>
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <li key={item.to}>
+                      <NavRow
+                        item={item}
+                        isCurrent={current === item.to}
+                        isPage={location.pathname === item.to}
+                        onNavigate={onNavigate}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </nav>
 
       <div className="space-y-3 border-t border-line-inverse px-4 py-4">

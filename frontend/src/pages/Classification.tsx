@@ -102,19 +102,19 @@ type ResultState =
   | { kind: "ready"; result: ClassificationResult; currency: Currency };
 
 const STATE_BADGE: Record<ResultState["kind"], { label: string; tone: StatusTone }> = {
-  none_selected: { label: "No asset selected", tone: "neutral" },
+  none_selected: { label: "No record selected", tone: "neutral" },
   loading: { label: "Reading the stored result", tone: "neutral" },
   never: { label: "Never classified", tone: "neutral" },
-  not_found: { label: "No such asset", tone: "caution" },
+  not_found: { label: "Unknown record", tone: "caution" },
   out_of_scope: { label: "Outside your scope", tone: "caution" },
   failed: { label: "Result unreadable", tone: "caution" },
-  ready: { label: "Proposal stored", tone: "neutral" },
+  ready: { label: "Suggestion stored", tone: "neutral" },
 };
 
 const CURRENCY_BADGE: Record<Currency, { label: string; tone: StatusTone }> = {
   current: { label: "Current rule version", tone: "success" },
   older: { label: "Older rule version", tone: "caution" },
-  unverified: { label: "Currency unverified", tone: "neutral" },
+  unverified: { label: "Rule version unknown", tone: "neutral" },
 };
 
 const CURRENCY_MEANING: Record<Currency, string> = {
@@ -129,19 +129,20 @@ const CURRENCY_MEANING: Record<Currency, string> = {
  * readable detail appears exactly once on the page.
  */
 const READ_ERROR: Partial<
-  Record<ResultState["kind"], { title: string; summary: string; message: string }>
+  Record<ResultState["kind"], { title: string; summary: string; message: string; code: string }>
 > = {
   not_found: {
-    title: "Asset not found",
+    title: "Record not found",
     summary: "No inventory record this account can read has that id.",
-    message:
-      "The backend answered asset_not_found: no inventory record has that id. Check the id in Data Inventory.",
+    message: "No data record has that id. Check the id in Data Inventory and try again.",
+    code: DETAIL_ASSET_NOT_FOUND,
   },
   out_of_scope: {
     title: "Outside your institution scope",
-    summary: "The asset exists, but not inside the institution scope these reads are sent with.",
+    summary: "The record exists, but not inside the institution scope you are viewing.",
     message:
-      "The backend answered out_of_scope: the asset exists but this account may not read it in the current institution scope.",
+      "This record exists, but your account cannot read it in the current institution scope. Change the scope in the sidebar if you expected to see it.",
+    code: DETAIL_OUT_OF_SCOPE,
   },
 };
 
@@ -189,7 +190,7 @@ function stateFor(
     return { kind: "loading" };
   }
   if (query.data === null) {
-    return { kind: "failed", message: "The backend returned no classification result for this asset." };
+    return { kind: "failed", message: "The backend returned no classification result for this record." };
   }
   const currency: Currency =
     ruleVersion === null
@@ -242,12 +243,12 @@ function indexRules(rules: ClassificationRules | null): Map<string, Classificati
  */
 function describeRun(assetId: number, previousId: number | null, row: ClassificationResult): string {
   if (previousId === null) {
-    return `Recorded the first classification result for asset #${assetId} (result #${row.id}, ${row.rule_version}).`;
+    return `Recorded the first classification result for record #${assetId} (result #${row.id}, ${row.rule_version}).`;
   }
   if (row.id === previousId) {
-    return `Asset #${assetId} returned the stored result #${row.id} unchanged: the metadata produced the same input fingerprint, so no new row was added.`;
+    return `Record #${assetId} returned the stored result #${row.id} unchanged: the metadata produced the same input fingerprint, so no new row was added.`;
   }
-  return `Recorded a new result #${row.id} for asset #${assetId}: ${humanize(row.outcome)}, ${row.confidence} confidence.`;
+  return `Recorded a new result #${row.id} for record #${assetId}: ${humanize(row.outcome)}, ${row.confidence} confidence.`;
 }
 
 export default function Classification() {
@@ -313,7 +314,7 @@ export default function Classification() {
   async function handleRun(target: number): Promise<void> {
     const previousId = latest.data?.id ?? null;
     setSendingFor(target);
-    setFeedback({ assetId: target, text: `Classifying asset #${target}…` });
+    setFeedback({ assetId: target, text: `Classifying record #${target}…` });
     try {
       const row = await runClassification(target, scope);
       setFeedback({ assetId: target, text: describeRun(target, previousId, row) });
@@ -348,7 +349,7 @@ export default function Classification() {
     <div>
       <PageHeader
         title="Classification & Data Quality"
-        description="Deterministic, explainable classification proposals computed from inventoried metadata only — never from file contents, and never applied automatically. Quality findings are advisory: nothing is merged, deleted or reclassified from this screen."
+        description="DataDiet suggests how sensitive a record is from its metadata only — never by reading file contents, and never applied automatically."
       />
 
       <AssetWorkspace
@@ -370,8 +371,8 @@ export default function Classification() {
           <Card className="mt-gutter">
             <CardBody>
               <EmptyState
-                title="Select an asset"
-                message="Enter a numeric asset id above to read its latest classification proposal, its history and its data-quality findings. The catalogues below are the same for every asset."
+                title="Nothing selected yet"
+                message="Enter a record id above to see its suggested classification, its history and its data-quality findings. The catalogues below are the same for every record."
               />
             </CardBody>
           </Card>
@@ -460,7 +461,7 @@ function AssetWorkspace({
     event.preventDefault();
     const parsed = parseAssetParam(value);
     if (parsed === null) {
-      setValidation("Asset id must be a positive integer.");
+      setValidation("Record id must be a positive whole number.");
       onSelect(null);
       return;
     }
@@ -477,14 +478,14 @@ function AssetWorkspace({
   return (
     <Card>
       <CardHeader
-        title="Asset"
-        description="Classification results are stored per inventoried asset. Name an asset by its inventory id to read what the rules proposed, on what evidence, and how that has changed."
+        title="Choose a record"
+        description="Type a record id to see what the rules suggested for it, the evidence behind that, and how it has changed over time."
       />
       <CardBody className="space-y-4">
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
           <Field
-            label="Asset id"
-            hint="The numeric id of an inventoried record. Data Inventory lists them."
+            label="Record id"
+            hint="The number shown in Data Inventory."
             error={validation}
           >
             {(control) => (
@@ -501,7 +502,7 @@ function AssetWorkspace({
             )}
           </Field>
           <Button type="submit" variant="primary">
-            Load asset
+            Load record
           </Button>
           {assetId !== null ? (
             <Button
@@ -517,26 +518,31 @@ function AssetWorkspace({
           ) : null}
         </form>
 
-        <p className="text-meta text-ink-muted">
-          {scope?.institutionId === undefined
-            ? "No institution scope is sent with these reads: the backend answers across every institution this account may read."
-            : `Reads are sent with institution_id=${scope.institutionId}, so an asset belonging to another institution answers 404 rather than leaking its contents.`}
-          {" "}
-          {canBrowseInventory ? (
-            <>
-              Need an id?{" "}
-              <Link to="/inventory" className="font-medium text-accent hover:underline">
-                Data Inventory
-              </Link>{" "}
-              lists the records this account may read.
-            </>
-          ) : null}
-        </p>
+        {canBrowseInventory ? (
+          <p className="text-meta text-ink-muted">
+            Need an id?{" "}
+            <Link to="/inventory" className="font-medium text-accent hover:underline">
+              Data Inventory
+            </Link>{" "}
+            lists the records this account can see.
+          </p>
+        ) : null}
+
+        <details className="rounded-card border border-line bg-surface-sunken px-card-x py-row-y">
+          <summary className="text-supporting font-medium text-ink-secondary">
+            Which records this page can read
+          </summary>
+          <p className="mt-2 text-meta text-ink-muted">
+            {scope?.institutionId === undefined
+              ? "No institution scope is sent with these reads: the backend answers across every institution this account may read."
+              : `Reads are sent with institution_id=${scope.institutionId}, so an asset belonging to another institution answers 404 rather than leaking its contents.`}
+          </p>
+        </details>
 
         {assetId !== null ? (
           <div className="space-y-3 rounded-card border border-line bg-surface-sunken px-card-x py-card-y">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="neutral">{`Asset #${assetId}`}</Badge>
+              <Badge tone="neutral">{`Record #${assetId}`}</Badge>
               <Badge tone={badge.tone}>{badge.label}</Badge>
               {state.kind === "ready" ? (
                 <Badge tone="neutral">
@@ -554,8 +560,8 @@ function AssetWorkspace({
 
             {state.kind === "never" ? (
               <p className="text-supporting text-ink-secondary">
-                Asset is inventoried but has no classification on record. An unclassified asset is an
-                explicit unknown, not a low-risk one.
+                This record is in the inventory but has no suggestion yet. That means it has not been
+                looked at, not that it is low risk.
               </p>
             ) : null}
 
@@ -577,8 +583,8 @@ function AssetWorkspace({
                 </Button>
               ) : (
                 <p className="text-supporting text-ink-muted">
-                  This account may read classifications but not create one: running it needs the
-                  classification:write permission the server verifies, so no run control is offered.
+                  This account can read suggestions but cannot create one: running a classification
+                  needs the classification:write permission the server verifies.
                 </p>
               )}
               {state.kind === "ready" ? (
@@ -622,14 +628,14 @@ function LatestPanel({ assetId, state, query, ruleIndex, historyLink }: LatestPa
     state.kind === "not_found" || state.kind === "out_of_scope"
       ? READ_ERROR[state.kind]!
       : state.kind === "failed"
-        ? { title: "Classification unavailable", message: state.message }
+        ? { title: "Classification unavailable", message: state.message, code: undefined }
         : undefined;
 
   return (
     <Card>
       <CardHeader
         title="Latest classification"
-        description={`The newest stored proposal for asset #${assetId}. A classification is metadata-only advice: it never changes the asset and selects no lifecycle action.`}
+        description={`The newest suggestion for record #${assetId}. It is advice from metadata only: it does not change the record or choose what happens to it.`}
         action={
           <Button variant="ghost" size="sm" loading={query.loading} onClick={query.refetch}>
             Refresh result
@@ -642,7 +648,7 @@ function LatestPanel({ assetId, state, query, ruleIndex, historyLink }: LatestPa
         {state.kind === "never" ? (
           <EmptyState
             title="No classification yet"
-            message="This asset has not been classified. Run a classification to record the first immutable result."
+            message="This record has no suggestion on file. Run a classification to store the first result."
           />
         ) : null}
 
@@ -650,6 +656,7 @@ function LatestPanel({ assetId, state, query, ruleIndex, historyLink }: LatestPa
           <ErrorState
             title={readError.title}
             message={readError.message}
+            code={readError.code}
             onRetry={state.kind === "failed" ? query.refetch : undefined}
           />
         ) : null}
@@ -659,12 +666,12 @@ function LatestPanel({ assetId, state, query, ruleIndex, historyLink }: LatestPa
             <div className="grid grid-cols-1 gap-row-y sm:grid-cols-2 xl:grid-cols-4">
               <StatTile label="Outcome" value={humanize(state.result.outcome)} tone={outcomeTone(state.result.outcome)} />
               <StatTile
-                label="Proposed category"
+                label="Suggested category"
                 value={state.result.proposed_category ?? "Unclassified"}
                 tone="neutral"
               />
               <StatTile
-                label="Proposed sensitivity"
+                label="Suggested sensitivity"
                 value={humanize(state.result.proposed_sensitivity)}
                 tone={sensitivityTone(state.result.proposed_sensitivity)}
               />
@@ -751,7 +758,7 @@ function EvidenceList({
     return (
       <EmptyState
         title="No evidence"
-        message="No metadata supported a proposal. This is an explicit unknown, not a low-risk classification."
+        message="Nothing in the record's metadata supported a suggestion. That means unknown, not low risk."
       />
     );
   }
@@ -809,7 +816,7 @@ function HistoryPanel({
     <Card>
       <CardHeader
         title="Classification history"
-        description="Immutable, append-only results. Each row keeps the rule version and input fingerprint that produced it, so an older proposal stays attributable after the rules change."
+        description="Every suggestion ever stored for this record, newest first. Rows are never edited: each keeps the rule version that produced it."
       />
       <CardBody className="space-y-4">
         {query.loading && list === null ? <Spinner label="Loading classification history…" /> : null}
@@ -823,13 +830,13 @@ function HistoryPanel({
           ) : (
             <>
               <Table
-                caption={`Classification history for asset #${list.results[0].asset_id}, page ${list.page} of ${list.total_pages}`}
+                caption={`Classification history for record #${list.results[0].asset_id}, page ${list.page} of ${list.total_pages}`}
               >
                 <TableHead>
                   <TableRow>
                     <TableHeaderCell scope="col">Classified</TableHeaderCell>
                     <TableHeaderCell scope="col">Outcome</TableHeaderCell>
-                    <TableHeaderCell scope="col">Proposal</TableHeaderCell>
+                    <TableHeaderCell scope="col">Suggestion</TableHeaderCell>
                     <TableHeaderCell scope="col">Created by</TableHeaderCell>
                     <TableHeaderCell scope="col">Rule</TableHeaderCell>
                     <TableHeaderCell scope="col">Fingerprint</TableHeaderCell>
@@ -857,7 +864,7 @@ function HistoryPanel({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-meta text-ink-muted">
-                  {`Page ${list.page} of ${list.total_pages} · ${list.total} stored result${list.total === 1 ? "" : "s"} for this asset`}
+                  {`Page ${list.page} of ${list.total_pages} · ${list.total} stored result${list.total === 1 ? "" : "s"} for this record`}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onShift(page - 1)}>
@@ -897,7 +904,7 @@ function QualityPanel({
     <Card>
       <CardHeader
         title="Data quality findings"
-        description="Deterministic checks over inventoried metadata: missing fields, unsupported extensions, conflicting values, duplicate candidates, stale observations, and source-mapping inconsistencies."
+        description="Automatic checks over the metadata we already hold: missing values, unsupported file types, conflicting values and possible duplicates. Advisory only — nothing here is merged, deleted or reclassified from this screen."
       />
       <CardBody className="space-y-4">
         {query.loading && report === null ? <Spinner label="Loading quality findings…" /> : null}
@@ -914,7 +921,7 @@ function QualityPanel({
             <div className="space-y-3">
               <EmptyState
                 title="No findings"
-                message="Every documented check passed for this asset. This does not prove the metadata is complete or correct."
+                message="Every documented check passed for this record. This does not prove the metadata is complete or correct."
               />
               {checks.length > 0 ? (
                 <p className="text-meta text-ink-muted">
@@ -925,7 +932,7 @@ function QualityPanel({
           ) : (
             <>
               <p className="text-meta text-ink-muted">
-                {`${report.findings.length} finding${report.findings.length === 1 ? "" : "s"} for asset #${report.asset_id}. Advisory only: nothing is merged, deleted or reclassified from this list.`}
+                {`${report.findings.length} finding${report.findings.length === 1 ? "" : "s"} for record #${report.asset_id}. Advisory only: nothing is merged, deleted or reclassified from this list.`}
               </p>
               <ul className="divide-y divide-line rounded-card border border-line bg-surface">
                 {report.findings.map((finding, index) => (
@@ -962,7 +969,7 @@ function FindingRow({
           </Badge>
         ) : null}
         {finding.related_asset_id !== null && finding.related_asset_id !== undefined ? (
-          <span className="text-meta text-ink-subtle">{`asset #${finding.related_asset_id}`}</span>
+          <span className="text-meta text-ink-subtle">{`record #${finding.related_asset_id}`}</span>
         ) : null}
       </div>
       <p className="text-body text-ink">{finding.message}</p>
@@ -1070,8 +1077,8 @@ function RulesSection({
 
               <p className="text-meta text-ink-muted">
                 {checkCount > 0
-                  ? `Data quality evaluates a fixed set of ${checkCount} documented metadata checks for one asset; each finding names its check and what that check looks at.`
-                  : "Data quality evaluates a fixed set of documented metadata checks for one asset; each finding names its check."}
+                  ? `Data quality evaluates a fixed set of ${checkCount} documented metadata checks for one record; each finding names its check and what that check looks at.`
+                  : "Data quality evaluates a fixed set of documented metadata checks for one record; each finding names its check."}
               </p>
             </>
           ) : null}
