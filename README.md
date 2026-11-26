@@ -12,11 +12,20 @@ ever deleting data automatically.
 > Authentication and authorization exist for development/test; production
 > fails closed without a valid signing secret, but no real OIDC/RS256 identity
 > provider is implemented. The remaining production blockers are tracked in
-> `docs/production-readiness.md`. Every figure shown in the UI is explicitly
-> labeled synthetic demo data. See `docs/architecture.md` for the
+> `docs/production-readiness.md`. See `docs/architecture.md` for the
 > capability-by-capability status. Phase 10 added Azure *preparation* only —
 > Bicep templates, a separate deployment workflow, and runbooks that have never
 > been compiled, validated, or deployed (`docs/azure-architecture.md`).
+>
+> **Temporary showcase exception (ADR-0032):** for the 2026-11-27 prototype,
+> backend `SHOWCASE_MODE=true` and frontend `VITE_SHOWCASE_MODE=true` expose a
+> persistent prototype banner and a `/showcase` guide. All displayed records are
+> fictional `[SHOWCASE SAMPLE]` rows written to Azure SQL by the reviewed
+> `scripts/seed_showcase.py` operator script and read through the real API.
+> Both flags default to `false`; normal builds show no sample data. Password
+> signup, private workspaces, archive/retrieval fulfilment and report export are
+> explicitly not implemented. See `docs/render-azure-sql-demo.md` for the hosted
+> runbook and teardown procedure.
 
 ## Stack
 
@@ -73,18 +82,24 @@ Full instructions, troubleshooting, and migration workflow: `docs/setup.md`.
 
 ## What the application delivers
 
-- Responsive institutional dashboard with sidebar navigation (Dashboard, Data
-  Inventory, Risk Analysis, Retention Policies, Archive, Retrieval Requests,
-  Reports, User Management) and mobile drawer.
-- FastAPI application with health/readiness probes and Swagger documentation.
-- MySQL development configuration and Alembic migrations through
-  `0012_audit_platform_admin_reset`, with validated environment settings.
-- Typed frontend API client with loading, empty, and error states on every view.
-- Real database-backed views; no synthetic demo endpoints or fixture data are exposed to users.
-- Automated tests: the backend pytest suite (some MySQL tests skip without a
-  disposable database) and 80 frontend (Vitest) tests, plus 19 live MySQL
-  migration tests when explicitly enabled with
-  `MIGRATION_TEST_ALLOW_DROP=1` and `MIGRATION_TEST_DB_URL`.
+- Responsive institutional dashboard with sidebar navigation (Dashboard,
+  Sources & Scans, Data Inventory, Risk Analysis, Classification, Retention
+  Policies, Holds, Review Queue, Archive, Retrieval Requests, Reports, User
+  Management) and mobile drawer.
+- FastAPI application with health/readiness probes (including bodyless `HEAD
+  /api/v1/health`) and Swagger documentation.
+- Alembic migrations through `0015_mssql_baseline` on the hosted Azure SQL
+  database, with validated environment settings.
+- Typed frontend API client with loading, empty, and error states on every view;
+  Dashboard, Risk, Users, Assets and Sources screens call real API routes.
+- Real database-backed views; no synthetic demo endpoints or browser fixtures.
+  Fictional showcase rows, when the two flags are enabled, come only from the
+  operator-run seed script and Azure SQL.
+- Automated tests: the backend pytest suite (some database tests skip without a
+  disposable database; 395 passed / 20 skipped on the showcase build) and the
+  frontend Vitest suite (557 passed in 38 files), plus live MySQL migration
+  tests when explicitly enabled with `MIGRATION_TEST_ALLOW_DROP=1` and
+  `MIGRATION_TEST_DB_URL`.
 
 ## Checks
 
@@ -140,6 +155,8 @@ have never been compiled, and it must not be enabled until the blockers in
 | `docs/azure-architecture.md` | Azure migration gap analysis, target design, configuration contract, cost categories |
 | `docs/azure-deployment.md` | Azure runbook: permissions, provisioning, secrets, database, migrations, rollback |
 | `docs/azure-cutover-checklist.md` | The gate list that must be satisfied before a cutover is called done |
+| `docs/render-azure-sql-demo.md` | Hosted Render/Vercel + Azure SQL runbook, showcase flags, seed and human-gated teardown |
+| `tasks/plan.md` | Showcase prototype plan, task status and verification checkpoint |
 | `database/README.md` | Migration workflow and development MySQL details |
 | `infra/README.md` | Docker Compose, Nginx, and the Azure template directory |
 

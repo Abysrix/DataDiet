@@ -548,8 +548,13 @@ institutional system, or personal data was introduced by this cleanup.
 Ruff clean, operator-script Ruff clean, 375 backend tests passed / 20 skipped,
 frontend typecheck clean, 500 Vitest tests passed, and the production build
 succeeded. The focused no-demo-route suite passed 5/5, and the sign-in suite
-passed 17/17 after the blank-email default was covered. Live Render/Vercel
-re-verification is still pending deployment of this change.
+passed 17/17 after the blank-email default was covered. The change was pushed as commit `51e105e` on `render-demo`: Render rebuilt it
+as `dep-dc49rcmi0phs739il3e0`, and Vercel promoted it to production as
+`dpl_2T9QDAscKX8fCHspVdeWa8YQLYDC`, then rebuilt as
+`dpl_FtWVsAbniGwEcc59iY4RbXmfqzDc` for the corrected frontend API setting. A
+fresh browser check at `https://data-diet.vercel.app` showed `/auth/config`
+called on the Render origin, an exact CORS allow-origin for the new frontend
+domain, and no demo/synthetic/tunnel strings in the shipped bundle.
 
 ---
 
@@ -583,3 +588,74 @@ operator out of band after implementation.
 **Verification.** Pending: full gate plus live Render/Vercel smoke tests for
 owner oversight, separate signup workspaces, and no anonymous privileged
 paths.
+
+---
+
+## ADR-0032 — Time-boxed showcase prototype with clearly labeled sample data
+
+**Status.** Accepted, temporary. Supersedes ADR-0030 only for the hosted
+showcase build described below; ADR-0030 remains in force for every other
+build.
+
+**Date.** 2026-11-27
+
+**Context.** The operator needs a complete, presentable prototype today to show
+what DataDiet can do, while the separate-workspace and local-identity modules
+are explicitly deferred. The current hosted build has no user-facing demo data:
+ADR-0030 removed the synthetic demo surface, and Dashboard/Risk show honest
+empty states. The operator was asked directly and chose a clearly labeled
+sample dataset on the current hosted app rather than live-entered data or
+empty states alone.
+
+**Decision.** Add a time-boxed `SHOWCASE_MODE` to the hosted prototype:
+
+- Backend `SHOWCASE_MODE=true` and frontend `VITE_SHOWCASE_MODE=true` are the
+  only switches that expose the prototype surface. Both default to false.
+- A reviewed operator script seeds one dedicated showcase account/workspace
+  with fictional records through the existing ORM and database. Every seeded
+  record is visibly labeled as showcase sample data; no real institutional
+  name, real personal data, or invented external integration is used.
+- All reads and writes still go through the real API, real authentication, and
+  Azure SQL. No endpoint may return a fabricated success state or simulated
+  connector result.
+- The UI shows a persistent, dismissible-once-per-session banner reading that
+  the app is in prototype mode and the records are fictional sample data. The
+  banner appears on every page while either flag is enabled.
+- The mode is for today's presentation only. Teardown is a human-approved
+  operator action: disable both flags, redeploy, and remove the showcase rows
+  through a reviewed script. No automatic deletion or bulk disposal is part of
+  the application.
+
+**Alternatives considered.**
+
+- *Live-entered data only.* Fully compliant and best for production, but too
+  slow to populate every feature before today's showcase.
+- *Empty states only.* Honest, but does not demonstrate the analytical and
+  governance workflows the audience needs to see.
+- *Restore the old `/api/v1/demo/*` surface.* Rejected: it looked like a real
+  integration, blurred the line between sample and production data, and was
+  removed by ADR-0030 for that reason.
+
+**Consequences.** The hosted prototype will show fictional data under an
+unmissable label. Tests must prove that the sample surface is absent when the
+flags are off. The frontend bundle will contain the word `SHOWCASE` only as a
+prototype label, never as a hidden data source. This ADR does not authorize
+real institutional systems, real personal data, or untested capability claims;
+those rules remain absolute. The showcase build must not be treated as the
+production-ready multi-tenant release.
+
+**Verification (local, 2026-11-27).** `scripts/check.ps1` passed end to end:
+backend and operator-script Ruff clean, pytest 395 passed / 20 skipped, frontend
+typecheck clean, Vitest 557 passed across 38 files, and the production build
+succeeded. Focused tests cover both flag defaults and their gating
+(`test_config_showcase.py`, `src/showcase.test.ts`, `ShowcaseBanner.test.tsx`),
+the banner and guide copy, the seed's guards and idempotence
+(`test_seed_showcase.py`), the new Dashboard and Risk read APIs, and the real
+Users / Assets / Sources UI contracts. Every score shown comes from
+`app.services.risk.compute_risk` under `documented-risk-v1` (ADR-0005). No
+`SYNTH-` identifier, sample label or fixture is exposed when either flag is off;
+the seed is the only writer of fictional rows and uses `DATABASE_URL` plus a
+sanitized target print. **Pending (Task 12):** push to `render-demo`, set both
+hosted flags, seed Azure SQL, and perform the live browser pass that confirms the
+banner and database-backed rows on the deployed app. Until then this ADR records
+a locally verified prototype, not a hosted claim.
