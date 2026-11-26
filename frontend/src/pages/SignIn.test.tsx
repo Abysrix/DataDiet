@@ -146,22 +146,24 @@ describe("SignIn", () => {
     expect(screen.getByLabelText(/^role/i)).toBeInTheDocument();
     // It must not pretend to be production authentication.
     expect(screen.getByText(/not production authentication/i)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/synthetic/i);
+    expect(document.body).not.toHaveTextContent(/SYNTH-/i);
   });
 
-  it("starts with a synthetic demo email that password managers can fill and paste can replace", async () => {
+  it("starts with an empty email that password managers can fill and paste can replace", async () => {
     renderSignIn();
 
     const email = await screen.findByLabelText(/^email/i);
-    expect(email).toHaveValue("SYNTH-demo@datadiet.local");
+    expect(email).toHaveValue("");
     expect(email).toHaveAttribute("name", "email");
+    expect(email).toHaveAttribute("placeholder", "you@example.com");
     expect(email).toHaveAttribute("autocomplete", "username");
     expect(email).toHaveAttribute("spellcheck", "false");
 
-    await userEvent.clear(email);
     await userEvent.click(email);
-    await userEvent.paste("SYNTH-reviewer@datadiet.local");
+    await userEvent.paste("reviewer@example.org");
 
-    expect(email).toHaveValue("SYNTH-reviewer@datadiet.local");
+    expect(email).toHaveValue("reviewer@example.org");
     expect(devLogin).not.toHaveBeenCalled();
   });
 
@@ -180,7 +182,8 @@ describe("SignIn", () => {
 
   it("reveals and focuses an invalid advanced field when it blocks submission", async () => {
     renderSignIn();
-    await screen.findByLabelText(/^email/i);
+    const email = await screen.findByLabelText(/^email/i);
+    await userEvent.type(email, "operator@example.org");
     const disclosure = screen.getByRole("button", { name: /advanced options/i });
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
 

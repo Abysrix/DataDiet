@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DemoNotice } from "./DemoNotice";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { Spinner } from "./Spinner";
@@ -35,15 +34,6 @@ describe("state components", () => {
 
     expect(screen.getByText("No records yet")).toBeInTheDocument();
     expect(screen.getByText("Nothing has been inventoried.")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("DemoNotice pairs the synthetic-data label with a status glyph", () => {
-    const { container } = render(<DemoNotice notice="SYNTH- assets only." />);
-
-    const note = screen.getByRole("note");
-    expect(note).toHaveTextContent("Synthetic data.");
-    expect(note).toHaveTextContent("SYNTH- assets only.");
     expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 });

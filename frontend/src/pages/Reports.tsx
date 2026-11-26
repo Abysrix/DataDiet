@@ -40,7 +40,7 @@ const DESTINATIONS: Destination[] = [
     to: "/risk",
     label: "Risk Analysis",
     permission: "inventory:read",
-    limit: "Rule-set results over synthetic fixtures, not an institutional risk register.",
+    limit: "No live assessments are connected yet, and it is not a signed risk register.",
   },
   {
     need: "What a human decided",
@@ -91,7 +91,7 @@ export default function Reports() {
     <div>
       <PageHeader
         title="Reports"
-        description="Evidence you can inspect in existing views. This UI does not generate, export, sign, or schedule reports, and it does not turn synthetic demo data into a compliance artefact."
+        description="Evidence you can inspect in existing views. This UI does not generate, export, sign, or schedule reports, and it does not turn stored records into a compliance artefact."
         actions={<Badge tone="neutral">No report generation</Badge>}
       />
 
@@ -105,7 +105,7 @@ export default function Reports() {
           <CardBody>
             <EmptyState
               title="No reports are generated in this UI"
-              message="There is no report endpoint, audit-event export, inventory certificate, or scheduled delivery integration. Nothing is fabricated from the synthetic demo data, so there is no file to download here."
+              message="There is no report endpoint, audit-event export, inventory certificate, or scheduled delivery integration. Nothing is fabricated from stored records, so there is no file to download here."
             />
           </CardBody>
         </Card>
@@ -186,10 +186,9 @@ export default function Reports() {
             <div className="flex flex-wrap items-start gap-3">
               <IconReports className="h-5 w-5 shrink-0 text-ink-secondary" />
               <p className="min-w-0 flex-1 text-supporting text-ink-secondary">
-                Risk figures are rule-set results over <span className="font-mono">SYNTH-</span>{" "}
-                fixtures; inventory rows are stored asset metadata. Neither is a signed report.
-                Audit events require authenticated actors and an export endpoint, neither of which
-                is exposed by this UI.
+                Risk assessments are not connected to this view; inventory rows are stored asset
+                metadata. Neither is a signed report. Audit events require authenticated actors and
+                an export endpoint, neither of which is exposed by this UI.
               </p>
             </div>
           </CardBody>

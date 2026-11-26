@@ -5,8 +5,9 @@
  * public `GET /auth/config` endpoint, and never pretends otherwise:
  *
  * - `development`       — a local development sign-in that creates or reuses
- *                         a synthetic account. The server refuses it in
- *                         production, so it can never become production auth.
+ *                         an account from the email the user enters. The server
+ *                         refuses it in production, so it can never become
+ *                         production auth.
  * - `clerk`             — sign-in is Clerk's, rendered by Clerk's own
  *                         component when this build was given a publishable
  *                         key. There is no DataDiet form and no pasted token,
@@ -50,9 +51,6 @@ const ROLE_OPTIONS: Array<{ value: RoleValue; label: string }> = [
   { value: "reviewer", label: "Reviewer — assess and decide" },
   { value: "admin", label: "Admin — manage policies, sources, and assets" },
 ];
-
-/** The `SYNTH-` prefix keeps the default account unmistakably non-production. */
-const DEFAULT_EMAIL = "SYNTH-demo@datadiet.local";
 
 export default function SignIn() {
   const { data: config, loading, error, refetch } = useApiQuery(fetchAuthConfig, []);
@@ -127,7 +125,7 @@ function SessionExpiredNotice() {
 /* --------------------------- local auth modes ------------------------------ */
 
 /**
- * Development shows the short synthetic form first. The token route is a link,
+ * Development shows the short local form first. The token route is a link,
  * not a second card competing for attention; in bearer-boundary mode it is the
  * only route, so it is shown immediately.
  */
@@ -165,7 +163,7 @@ function DevSignInCard({
   onUseToken: () => void;
 }) {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState(DEFAULT_EMAIL);
+  const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [institutionId, setInstitutionId] = useState("");
   const [role, setRole] = useState<RoleValue>("viewer");
@@ -195,7 +193,7 @@ function DevSignInCard({
     const nextErrors: { email?: string; institution?: string } = {};
 
     if (!trimmedEmail.includes("@")) {
-      nextErrors.email = "Enter an email address for the synthetic account.";
+      nextErrors.email = "Enter an email address.";
     }
     let parsedInstitution: number | undefined;
     if (institutionId.trim()) {
@@ -233,8 +231,8 @@ function DevSignInCard({
     <>
       <CardHeader
         title="Development sign-in"
-        description="Sign in with a synthetic account. Development only — not production authentication."
-        action={<Badge tone="warning">Demo only</Badge>}
+        description="Sign in with the email for this local account. Development only — not production authentication."
+        action={<Badge tone="warning">Development only</Badge>}
       />
       <CardBody>
         {!devLoginEnabled ? (
@@ -254,7 +252,7 @@ function DevSignInCard({
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field
             label="Email"
-            hint="A synthetic account is created or reused."
+            hint="An account is created or reused from the email you enter."
             error={fieldErrors.email}
             required
           >
@@ -268,7 +266,7 @@ function DevSignInCard({
                 name="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="SYNTH-reviewer@datadiet.local"
+                placeholder="you@example.com"
                 autoComplete="username"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -323,7 +321,7 @@ function DevSignInCard({
                     name="display_name"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="Synthetic Reviewer"
+                    placeholder="Your name"
                   />
                 )}
               </Field>

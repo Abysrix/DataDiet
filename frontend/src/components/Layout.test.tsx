@@ -6,7 +6,7 @@ import { platformAdmin, testUser, withAuth } from "../test/auth";
 import type { UserProfile } from "../api/types";
 import { NAV_ITEMS, visibleNavGroups, visibleNavItems } from "./nav";
 
-vi.mock("../api/demo", () => ({
+vi.mock("../api/health", () => ({
   fetchHealth: vi.fn().mockRejectedValue(new Error("offline in test")),
 }));
 

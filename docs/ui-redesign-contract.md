@@ -38,8 +38,8 @@ Every routed page must have:
    decision or detail list, then provenance/caveats.
 6. Permission-aware controls. If the server would refuse an action, render it as
    information, not as a live button.
-7. `DemoNotice` when the response carries `synthetic_demo_data`. Keep every
-   synthetic identifier `SYNTH-` prefixed.
+7. No synthetic-data notice or fixture payload exists in the user-facing flow;
+   an absent capability is stated as an honest empty state.
 8. Responsive behaviour at 375px, 768px, 1024px, and 1440px. No horizontal
    overflow; wide tables use the existing table primitive's scroll container.
 

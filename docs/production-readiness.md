@@ -461,8 +461,8 @@ Remaining gaps:
 - No dependency-update automation, secret scanning, SBOM, image signing, or
   container/deployment pipeline is configured in the repository.
 - `/docs` and `/openapi.json` are exposed through the placeholder proxy.
-- Demo endpoints default to enabled (`DEMO_DATA_ENABLED=true`); production
-  should set it false unless a documented decision requires otherwise.
+- Synthetic demo endpoints, the `synthetic_demo_data` envelope and the
+  `DEMO_DATA_ENABLED` setting were removed; no demo surface is exposed.
 - There is no rate limiting at the application or edge.
 
 **Required before production.**
@@ -472,8 +472,7 @@ Remaining gaps:
   updates and secret scanning, and add a Python lockfile with hash verification.
 - Build a minimal production image or deployment artifact, scan it, sign it,
   and produce an SBOM; keep the development compose file out of production.
-- Decide and enforce API documentation exposure and `DEMO_DATA_ENABLED` in
-  production.
+- Decide and enforce API documentation exposure in production.
 - Add edge rate limiting and test it.
 
 ## 10. Ordered gate to production

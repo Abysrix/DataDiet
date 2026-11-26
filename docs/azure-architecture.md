@@ -47,8 +47,9 @@ that Azure does not solve by itself).
 4. Token *verification* keeps its current contract: an external party issues
    HS256 bearer tokens to the same issuer/audience until RS256/JWKS is
    implemented and tested.
-5. Everything currently labelled synthetic demo data remains synthetic; a
-   network-reachable deployment should turn `DEMO_DATA_ENABLED` off.
+5. No synthetic demo endpoint exists; records are created by signed-in users
+   through the real API, and a network-reachable deployment disables the
+   development sign-in provider.
 
 ### 1.3 Blockers
 
@@ -143,7 +144,6 @@ aspirational: a key not in this table is not a supported setting.
 | `DATABASE_URL` | `get_engine()`, Alembic | SQLAlchemy URL; must contain `://` | **Key Vault reference** |
 | `DATABASE_ECHO` | engine | bool | app setting, `false` |
 | `CORS_ORIGINS` | `CORSMiddleware` in `app/main.py` | comma-separated **or** JSON array (F1) | app setting, comma-joined from `backendCorsOrigins` |
-| `DEMO_DATA_ENABLED` | demo router gate | bool | app setting from `demoDataEnabled` (default `false`) |
 | `LOCAL_SOURCE_ROOTS` | local-folder source allow-list | **JSON object** (a dict field is JSON-decoded before validators — the comma form is *not* valid here) | backend-module default `'{}'`: App Service has no durable user filesystem, so local-folder sources stay disabled |
 | `SCAN_MAX_RECORDS` / `SCAN_BATCH_SIZE` | scan service | int, bounds validated in code | backend-module defaults (`5000` / `500`), not exposed as top-level parameters |
 | `AUTH_JWT_SECRET` | `issue_token` / verification | ≥32 chars in production, else startup is refused; absent ⇒ 503 | **Key Vault reference** |

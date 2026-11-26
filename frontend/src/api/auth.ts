@@ -28,7 +28,7 @@ export function fetchAuthConfig(): Promise<AuthConfig> {
 }
 
 /**
- * Development/test sign-in for a synthetic local account.
+ * Development/test sign-in for a local account.
  *
  * The server issues a real, signed bearer token through the same verification
  * path as any other token — but hard-disables this endpoint in production, so

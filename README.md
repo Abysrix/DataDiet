@@ -80,7 +80,7 @@ Full instructions, troubleshooting, and migration workflow: `docs/setup.md`.
 - MySQL development configuration and Alembic migrations through
   `0012_audit_platform_admin_reset`, with validated environment settings.
 - Typed frontend API client with loading, empty, and error states on every view.
-- Synthetic sample data served through a `synthetic_demo_data`-labeled API.
+- Real database-backed views; no synthetic demo endpoints or fixture data are exposed to users.
 - Automated tests: the backend pytest suite (some MySQL tests skip without a
   disposable database) and 80 frontend (Vitest) tests, plus 19 live MySQL
   migration tests when explicitly enabled with

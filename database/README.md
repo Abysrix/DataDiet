@@ -56,5 +56,5 @@ the database is unreachable — it does not silently create production tables.
 - Migration `0001_initial_schema` creates all foundation tables (sources,
   inventory, risk assessments, policies, holds, lifecycle actions, archives,
   retrieval requests, audit events, user directory placeholder).
-- No seed data is written by migrations. Synthetic demo data is served
-  in-process by the API (`/api/v1/demo/*`) and never touches MySQL.
+- No seed data is written by migrations. Records are created by signed-in users
+  through the real API; there is no in-process demo dataset.

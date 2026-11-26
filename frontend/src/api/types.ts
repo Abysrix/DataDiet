@@ -10,18 +10,6 @@ export type RiskBand = "low" | "moderate" | "high" | "critical";
 export type RetentionAction = "retain" | "archive" | "review" | "eligible_for_disposal";
 export type PolicyStatus = "active" | "draft" | "retired";
 
-/** Marker attached to every synthetic payload served by the backend. */
-export interface DemoMeta {
-  classification: "synthetic_demo_data";
-  notice: string;
-  source: "in_process_fixture";
-}
-
-export interface DemoEnvelope<T> {
-  meta: DemoMeta;
-  data: T;
-}
-
 export interface HealthResponse {
   status: "ok";
   service: string;
@@ -29,59 +17,9 @@ export interface HealthResponse {
   environment: string;
 }
 
-export interface SensitivityBreakdown {
-  public: number;
-  internal: number;
-  confidential: number;
-  restricted: number;
-}
-
-export interface RiskBreakdown {
-  low: number;
-  moderate: number;
-  high: number;
-  critical: number;
-}
-
-export interface ActivityItem {
-  event_id: string;
-  event_type: string;
-  description: string;
-  actor: string;
-  occurred_on: string;
-}
-
-export interface DashboardSummary {
-  total_records: number;
-  duplicate_candidates: number;
-  pending_approvals: number;
-  open_retrieval_requests: number;
-  storage_bytes: number;
-  by_sensitivity: SensitivityBreakdown;
-  by_risk_band: RiskBreakdown;
-  by_retention_action: Record<RetentionAction, number>;
-  recent_activity: ActivityItem[];
-}
-
-export interface InventoryRecord {
-  record_id: string;
-  title: string;
-  source_name: string;
-  source_type: string;
-  record_type: string;
-  sensitivity: Sensitivity;
-  contains_personal_data: boolean;
-  duplicate_candidate: boolean;
-  size_bytes: number;
-  retention_action: RetentionAction;
-  owner_team: string;
-  last_reviewed: string | null;
-}
-
 /* ------------------------------------------------------------------------
  * Inventory: the real asset table (GET /api/v1/assets).
  * Mirrors backend/app/api/schemas/assets.py — `Asset` and `AssetListResponse`.
- * The synthetic `/demo/inventory` fixture above is a different, older shape.
  * ------------------------------------------------------------------------ */
 
 /**
@@ -145,72 +83,6 @@ export interface AssetListQuery {
   source_type?: string;
   lifecycle_status?: LifecycleStatus;
   institution_id?: number;
-}
-
-export interface RiskIndicatorView {
-  code: string;
-  label: string;
-  points: number;
-  explanation: string;
-}
-
-export interface RiskRecordView {
-  record_id: string;
-  title: string;
-  sensitivity: Sensitivity;
-  score: number;
-  band: RiskBand;
-  indicators: RiskIndicatorView[];
-}
-
-export interface RiskRuleInfo {
-  code: string;
-  description: string;
-  points: string;
-}
-
-export interface RiskAnalysisPage {
-  rule_set: string;
-  rules: RiskRuleInfo[];
-  records: RiskRecordView[];
-}
-
-export interface RetentionPolicyView {
-  policy_id: string;
-  name: string;
-  version: string;
-  status: PolicyStatus;
-  scope: string;
-  retention_period_days: number;
-  effective_from: string;
-  applies_to_count: number;
-  notes: string;
-}
-
-export interface HoldView {
-  hold_id: string;
-  name: string;
-  scope: string;
-  records_in_scope: number;
-}
-
-export interface ApprovalQueueItem {
-  request_id: string;
-  action: string;
-  record_id: string;
-  requested_by: string;
-}
-
-export interface RetentionPage {
-  policies: RetentionPolicyView[];
-  active_holds: HoldView[];
-  approval_queue: ApprovalQueueItem[];
-}
-
-export interface SourceView {
-  name: string;
-  source_type: string;
-  status: string;
 }
 
 /* ---------------------------------------------------------------------------

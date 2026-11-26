@@ -518,3 +518,68 @@ received 403, while `SYNTH-admin@datadiet.local` received an elevated token
 through the same public route. This closes the observed escalation without
 changing the viewer path. The next production iteration replaces this route
 with local email/password accounts.
+
+---
+
+## ADR-0030 — Remove the synthetic demo surface from the user-facing product
+
+**Decision.** The demo API router, schemas, service, tests, frontend demo client,
+demo-only types, `DemoNotice`, shared demo fixtures, and the `DEMO_DATA_ENABLED`
+setting are removed. No user-facing route, UI copy, default field, or API
+envelope may expose `SYNTH-` data. `GET /api/v1/health` and
+`GET /api/v1/health/ready` remain real probes; Dashboard and Risk Analysis show
+honest empty states when no database records exist. Synthetic identifiers stay
+permitted in backend and frontend tests only. The dead `PlaceholderPage` and
+deprecated `lib/labels` compatibility shim were removed in the same cleanup.
+
+**Why.** The approved V1 objective is a hosted app usable with real,
+user-entered governance metadata. A public demo surface with synthetic payloads
+contradicts the "never fabricate an integration" and "never claim an untested
+capability" rules, and it made empty hosted screens look populated without
+proof that Azure SQL held any rows.
+
+**Consequences.** Browser tests that depended on demo payloads were rewritten;
+`backend/tests/test_no_demo_routes.py` guards that every former demo path is
+404. Historical Clerk/Azure/Cloudflare documents remain as superseded evidence,
+but stale operational guidance was corrected. No production data, real
+institutional system, or personal data was introduced by this cleanup.
+
+**Verification (2026-11-27).** `scripts/check.ps1` passed end to end: backend
+Ruff clean, operator-script Ruff clean, 375 backend tests passed / 20 skipped,
+frontend typecheck clean, 500 Vitest tests passed, and the production build
+succeeded. The focused no-demo-route suite passed 5/5, and the sign-in suite
+passed 17/17 after the blank-email default was covered. Live Render/Vercel
+re-verification is still pending deployment of this change.
+
+---
+
+## ADR-0031 — Platform owner oversight with private per-account workspaces
+
+**Decision.** `iamadmin@gmail.com` is the seeded platform owner of the whole
+DataDiet project. The owner can see and manage all accounts and workspaces.
+Every other open self-registration still creates its own private workspace and
+its own admin membership/role rows; those workspaces remain isolated from one
+another and are not merged into a single shared workspace. The server assigns
+roles and ownership from the registration transaction and ignores all
+client-supplied role, institution, membership, and platform-admin fields. The
+owner password is chosen by the operator, stored only as a salted hash or
+supplied at runtime as a secret, and never committed.
+
+**Why.** The operator needs one account from which the hosted project and its
+tenants can be demonstrated to a teacher, while still needing to show that a
+new signup creates a private workspace with database-backed roles. This
+supersedes only the earlier "never a platform administrator" assumption in
+`spec/capability-map.md`; it does not relax tenant isolation, validation, or
+the prohibition on real institutional/personal data.
+
+**Consequences.** The `identity` module must implement seeded owner bootstrap,
+email/password signup, signin, signout, change-password, hashed credential
+storage, and rate-limit controls. The `workspace` module must persist one
+workspace and one admin membership per signup, plus owner oversight with tests
+that prove cross-tenant writes remain refused. Dev-login is removed from the
+hosted flow before the demo, and the chosen owner password is delivered to the
+operator out of band after implementation.
+
+**Verification.** Pending: full gate plus live Render/Vercel smoke tests for
+owner oversight, separate signup workspaces, and no anonymous privileged
+paths.

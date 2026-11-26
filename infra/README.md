@@ -69,6 +69,7 @@ docker compose -f infra/docker-compose.dev.yml --profile edge up -d
 
 ## Docker not installed?
 
-That is fine for Phase 1. The backend health endpoint and all synthetic demo
-endpoints work without MySQL; only `/api/v1/health/ready` reports degraded and
-Alembic migrations require a reachable database.
+That is fine for local API development. The backend health endpoint works
+without a database; `/api/v1/health/ready` reports degraded and Alembic
+migrations require a reachable database. User data is only created through the
+authenticated API once a database is available.

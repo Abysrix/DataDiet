@@ -121,8 +121,6 @@ services:
         value: <the aud in the Clerk JWT template>
       - key: CLERK_AUTO_PROVISION
         value: "false"
-      - key: DEMO_DATA_ENABLED
-        value: "true"           # section 10 — make this an explicit decision
       - key: AUTH_DEV_PROVIDER_ENABLED
         value: "false"          # redundant by design: the route is not registered
 
@@ -403,13 +401,11 @@ unauthenticated request to a protected endpoint answers 503
 `auth_not_configured:` when nothing is configured and 401 when the token is wrong
 — never a permission, never a listing.
 
-`DEMO_DATA_ENABLED` deserves a decision, not a default. `/api/v1/demo/*` serves
-synthetic fixtures with the `SYNTH-` prefix and the `synthetic_demo_data`
-envelope ([AGENTS.md](../AGENTS.md) rule 3). Leaving it `true` in staging makes
-first sign-in show something; the cost is public endpoints that serve
-non-production data. If staging will ever be reachable by a person who is not
-the operator, set it `false` and seed a small synthetic set through the real
-ingestion routes instead. Record whichever you chose.
+There is no demo-data gate to decide: `/api/v1/demo/*`, the `synthetic_demo_data`
+envelope and the `DEMO_DATA_ENABLED` setting were removed. Staging must be
+populated through the real, authenticated API; no synthetic fixture is served to
+a browser. Keep `AUTH_DEV_PROVIDER_ENABLED=false` here so the development
+sign-in route is never registered.
 
 ## 11. Secrets, rotation, and what may be plaintext
 

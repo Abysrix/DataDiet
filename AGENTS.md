@@ -45,9 +45,9 @@ Instructions for AI agents and new engineers working in this repository. Read
   interfaces, Tailwind utility classes (no CSS files per component).
 - **API types**: `frontend/src/api/types.ts` mirrors the backend Pydantic
   schemas. When you change a schema, update the type and any affected view.
-- **Demo data**: keep the `SYNTH-` identifier prefix and the
-  `synthetic_demo_data` envelope on anything synthetic. Never bypass
-  `DemoEnvelope`.
+- **Test fixtures**: synthetic identifiers in tests keep the `SYNTH-` prefix,
+  but no user-facing route, UI copy, default field, or API envelope may expose
+  synthetic data. Demo endpoints and `DemoEnvelope` were removed.
 - **Tests**: add a backend test for new logic and a frontend test for new
   interactive or data-rendering components. Prefer testing documented rules over
   snapshots.

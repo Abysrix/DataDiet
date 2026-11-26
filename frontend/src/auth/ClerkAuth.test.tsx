@@ -89,13 +89,10 @@ const fetchAuthConfig = vi.fn();
 const devLogin = vi.fn();
 
 /**
- * The last test mounts the real router and shell, so the page the shell renders
- * must not be able to crash the route guard under test. Its data is not part of
- * this seam, so both demo calls reject — which those pages already render as
- * their documented error state.
+ * The last test mounts the real router and shell, so the health indicator must
+ * not make a live request. Its result is not part of this seam.
  */
-vi.mock("../api/demo", () => ({
-  fetchDashboard: () => Promise.reject(new Error("dashboard data is not part of this test")),
+vi.mock("../api/health", () => ({
   fetchHealth: () => Promise.reject(new Error("health is not part of this test")),
 }));
 

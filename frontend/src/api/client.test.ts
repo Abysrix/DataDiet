@@ -32,13 +32,11 @@ describe("apiGet", () => {
 
   it("surfaces the backend detail message on HTTP errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ detail: "Synthetic demo endpoints are disabled." }, 404, "Not Found"),
+      jsonResponse({ detail: "Asset not found." }, 404, "Not Found"),
     );
 
-    await expect(apiGet("/api/v1/demo/inventory")).rejects.toBeInstanceOf(ApiError);
-    await expect(apiGet("/api/v1/demo/inventory")).rejects.toThrow(
-      "Synthetic demo endpoints are disabled.",
-    );
+    await expect(apiGet("/api/v1/assets/99999")).rejects.toBeInstanceOf(ApiError);
+    await expect(apiGet("/api/v1/assets/99999")).rejects.toThrow("Asset not found.");
   });
 
   it("wraps network failures in an actionable message", async () => {

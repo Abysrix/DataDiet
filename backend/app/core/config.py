@@ -67,10 +67,6 @@ class Settings(BaseSettings):
     # the documented comma-separated form (and even a single origin) outright.
     cors_origins: Annotated[list[str], NoDecode] = Field(default=["http://localhost:5173"])
 
-    # Feature gates ----------------------------------------------------------
-    # Phase 1: synthetic demo endpoints only. No real integrations exist yet.
-    demo_data_enabled: bool = True
-
     # Phase 4: controlled data ingestion -------------------------------------
     # Allow-listed local directories that may be registered as `local_folder`
     # sources. Key -> absolute directory path. Empty by default, so local-folder

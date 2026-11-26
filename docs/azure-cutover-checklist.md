@@ -89,7 +89,7 @@ cutover cannot proceed until it is satisfied.
 | ☐ | Frontend built with the correct `VITE_API_BASE_URL`; bundle calls the intended API origin | Dev | Network trace from the browser |
 | ☐ | Backend `httpsOnly`, `minTlsVersion=1.2`, `ftpsState=FtpsOnly` in the live resource | Ops | Site config JSON |
 | ☐ | Health check path `/api/v1/health` configured and keeping instances warm | Ops | Portal |
-| ☐ | `DEMO_DATA_ENABLED=false` (unless a recorded decision says otherwise) and `AUTH_DEV_PROVIDER_ENABLED=false` | Security | App settings |
+| ☐ | `AUTH_DEV_PROVIDER_ENABLED=false` (demo endpoints no longer exist) | Security | App settings |
 | ☐ | CORS list == the exact frontend origins, HTTPS only, no `*` | Security | `CORS_ORIGINS` value + browser preflight result |
 
 ## 6. Functional verification on staging — **Gate**

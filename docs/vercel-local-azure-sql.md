@@ -1,6 +1,9 @@
 # Demo runbook: Vercel frontend + local backend + Azure SQL Database
 
-**Status: executed for the local demo on 2026-11-27.** The Azure SQL server,
+**Status: historical, superseded by `docs/render-azure-sql-demo.md`.** The
+Cloudflare tunnel is stopped and dev-login is being replaced by local accounts.
+
+**Executed for the local demo on 2026-11-27.** The Azure SQL server,
 free serverless database, narrow firewall rule, Alembic migration, Vercel
 deployment, local backend CORS configuration and a free Cloudflare quick tunnel
 are in place. Re-check the live values below before trusting them; cloud
@@ -30,9 +33,9 @@ browser (any machine) ──► https://datadiet-demo.vercel.app  (Vite SPA)
 2. **No broad firewall rule.** Only this machine's public IP is allowed. No
    `0.0.0.0/0` rule was created. If the public IP changes, update the existing
    narrow rule; never widen it without explicit approval.
-3. **No real data.** Only invented `SYNTH-` fixtures may be used. The
-   `/api/v1/demo/*` responses are enveloped in `synthetic_demo_data` and are
-   in-memory fixtures, **not** proof that Azure SQL contains rows.
+3. **No fabricated data.** This historical tunnel runbook no longer serves
+   in-memory fixtures; records are created by signed-in users through the real
+   API. `/api/v1/health/ready` is the only claim that Azure SQL was reached.
 4. **No fabricated integration.** Every page must show its real loading, empty
    and error states. `GET /api/v1/health/ready` is the only claim that the
    backend reached the database.
@@ -308,10 +311,9 @@ backend is down. Check in the viewer's browser:
 7. Refresh a deep route such as `/governance/assets/1`; the SPA rewrite should
    serve `index.html` and the API calls should target the `trycloudflare.com`
    tunnel, not `localhost`.
-8. Sign in with a synthetic `SYNTH-` account through dev-login. The simplified
-   page asks for email and role first; `Advanced options` reveals display name,
-   institution id and platform admin, and `Use a bearer token instead` reveals
-   the token path. Enter no real institutional data.
+8. This historical runbook's dev-login step is superseded by local
+   email/password sign-up on the current Render/Vercel deployment. Do not use
+   this tunnel path for account creation.
 9. After the demo, stop the tunnel first, then the backend. The tunnel is
    public even though the backend itself still binds only `127.0.0.1`.
 

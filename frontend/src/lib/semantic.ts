@@ -3,11 +3,11 @@
  * colour role and its readable label. Call sites pick a role through one of the
  * `toneFor*` helpers, never a colour directly.
  *
- * Before this module, the same values were mapped in seven places —
- * `lib/labels.ts` plus five page-local tables — and two of them disagreed:
+ * Before this module, the same values were mapped in seven places — an older
+ * `lib/labels` shim plus five page-local tables — and two of them disagreed:
  * policy `draft` was amber in one and slate in the other, quality severity
  * `high` was rose in one and orange in the other. The tables now live here and
- * resolve those conflicts; `lib/labels.ts` survives only as a re-export shim.
+ * resolve those conflicts; the obsolete shim was removed.
  */
 
 import type {

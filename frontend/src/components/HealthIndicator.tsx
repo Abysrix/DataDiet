@@ -1,4 +1,4 @@
-import { fetchHealth } from "../api/demo";
+import { fetchHealth } from "../api/health";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { StatusIcon } from "./icons";
 import { TONE_INK } from "./ui/statusClasses";

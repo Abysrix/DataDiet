@@ -57,7 +57,7 @@ export default function Archive() {
           <CardBody>
             <EmptyState
               title="No archive operations are available"
-              message="This screen has no storage-provider integration, no manifest, no restore path, and no integrity check. It does not present disabled buttons as if an operation could run, and no synthetic archive rows are shown."
+              message="This screen has no storage-provider integration, no manifest, no restore path, and no integrity check. It does not present disabled buttons as if an operation could run, and no placeholder archive rows are shown."
               action={
                 hasDestination ? (
                   <div className="flex flex-wrap justify-center gap-gutter">
