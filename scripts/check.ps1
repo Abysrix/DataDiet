@@ -26,6 +26,26 @@ function Assert-LastExitCode {
     }
 }
 
+# Native tools may write harmless notices to stderr (npm's update notice does).
+# Windows PowerShell turns that stderr into a terminating error under
+# ErrorActionPreference = Stop. Suspend that preference around the invocation;
+# Assert-LastExitCode still fails the gate on real non-zero exits.
+function Invoke-CheckedNative {
+    param(
+        [scriptblock]$Command,
+        [string]$Step
+    )
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $Command
+        Assert-LastExitCode $Step
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
 try {
     if (-not (Test-Path $python)) {
         throw "Virtual environment not found at $python. See docs/setup.md to create it."
@@ -33,32 +53,26 @@ try {
 
     Write-Host "== Backend lint (ruff) ==" -ForegroundColor Cyan
     Set-Location (Join-Path $repoRoot "backend")
-    & $python -m ruff check .
-    Assert-LastExitCode "Backend lint (ruff)"
+    Invoke-CheckedNative { & $python -m ruff check . } "Backend lint (ruff)"
 
     # Operator scripts live outside backend/ but use the same Ruff configuration
     # (line length, rules). Linting them here keeps the gate and CI in parity;
     # the formatter stays out of the gate on purpose (see AGENTS.md).
     Write-Host "== Operator scripts lint (ruff) ==" -ForegroundColor Cyan
-    & $python -m ruff check ..\scripts
-    Assert-LastExitCode "Operator scripts lint (ruff)"
+    Invoke-CheckedNative { & $python -m ruff check ..\scripts } "Operator scripts lint (ruff)"
 
     Write-Host "== Backend tests (pytest) ==" -ForegroundColor Cyan
-    & $python -m pytest
-    Assert-LastExitCode "Backend tests (pytest)"
+    Invoke-CheckedNative { & $python -m pytest } "Backend tests (pytest)"
 
     Write-Host "== Frontend type check (tsc) ==" -ForegroundColor Cyan
     Set-Location (Join-Path $repoRoot "frontend")
-    npm run typecheck
-    Assert-LastExitCode "Frontend type check (tsc)"
+    Invoke-CheckedNative { npm run typecheck } "Frontend type check (tsc)"
 
     Write-Host "== Frontend tests (vitest) ==" -ForegroundColor Cyan
-    npm test
-    Assert-LastExitCode "Frontend tests (vitest)"
+    Invoke-CheckedNative { npm test } "Frontend tests (vitest)"
 
     Write-Host "== Frontend production build ==" -ForegroundColor Cyan
-    npm run build
-    Assert-LastExitCode "Frontend production build"
+    Invoke-CheckedNative { npm run build } "Frontend production build"
 }
 catch {
     if ($script:checkExitCode -eq 0) {
