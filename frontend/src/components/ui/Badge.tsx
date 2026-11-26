@@ -17,7 +17,7 @@ export interface BadgeProps {
 export function Badge({ tone = "neutral", children }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-meta font-medium ring-1 ring-inset ${TONE_SURFACE[resolveTone(tone)]}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-0.5 text-meta font-medium leading-tight ring-1 ring-inset ${TONE_SURFACE[resolveTone(tone)]}`}
     >
       {children}
     </span>

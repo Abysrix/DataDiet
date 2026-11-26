@@ -6,6 +6,7 @@ import { StatusIcon } from "../icons";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Progress } from "./Progress";
+import { TONE_INK } from "./statusClasses";
 import { ToastProvider, useToast } from "./Toast";
 
 const ROLES: StatusTone[] = ["neutral", "info", "success", "warning", "caution", "critical"];
@@ -83,6 +84,29 @@ describe("status surfaces agree", () => {
     );
     expect(distinct.size).toBe(5);
     expect(markupOf("caution")).toBe(markupOf("warning"));
+  });
+
+  it("folds a brand accent and a legacy name onto a real status glyph", () => {
+    const { container } = render(
+      <>
+        <span data-tone="neutral"><StatusIcon tone="neutral" /></span>
+        <span data-tone="critical"><StatusIcon tone="critical" /></span>
+        <span data-tone="accent"><StatusIcon tone="accent" /></span>
+        <span data-tone="legacy"><StatusIcon tone="rose" /></span>
+      </>,
+    );
+
+    const markupOf = (tone: string) =>
+      container.querySelector(`[data-tone="${tone}"] svg`)?.innerHTML ?? "";
+
+    expect(markupOf("accent")).toBe(markupOf("neutral"));
+    expect(markupOf("legacy")).toBe(markupOf("critical"));
+  });
+
+  it("exposes a token ink class for every role's glyph", () => {
+    for (const role of ROLES) {
+      expect(TONE_INK[role]).toBe(`text-${role}-ink`);
+    }
   });
 
   it("paints the same role in a toast", () => {

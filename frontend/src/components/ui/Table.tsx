@@ -25,7 +25,7 @@ export type TableCellAlign = keyof typeof ALIGN_CLASSES;
  */
 export function Table({ caption, children, className }: TableProps) {
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <div className="min-w-0 overflow-x-auto rounded-card border border-line bg-surface">
       <table className={`w-full border-collapse text-left ${className ?? ""}`}>
         <caption className="sr-only">{caption}</caption>
         {children}
@@ -43,7 +43,7 @@ export function TableBody({ children }: { children: ReactNode }) {
 }
 
 export function TableRow({ children, className }: { children: ReactNode; className?: string }) {
-  return <tr className={`hover:bg-surface-hover ${className ?? ""}`}>{children}</tr>;
+  return <tr className={`transition-colors hover:bg-surface-hover ${className ?? ""}`}>{children}</tr>;
 }
 
 export interface TableHeaderCellProps extends ThHTMLAttributes<HTMLTableCellElement> {
@@ -62,7 +62,7 @@ export function TableHeaderCell({
   return (
     <th
       scope={scope}
-      className={`px-control-x py-row-y text-meta font-semibold whitespace-nowrap text-ink-muted ${ALIGN_CLASSES[align]} ${
+      className={`whitespace-nowrap px-control-x py-row-y text-meta font-semibold uppercase tracking-wide text-ink-muted ${ALIGN_CLASSES[align]} ${
         className ?? ""
       }`}
       {...rest}
@@ -79,7 +79,7 @@ export interface TableCellProps extends TdHTMLAttributes<HTMLTableCellElement> {
 export function TableCell({ align = "left", className, children, ...rest }: TableCellProps) {
   return (
     <td
-      className={`px-control-x py-row-y text-body align-top text-ink-secondary ${ALIGN_CLASSES[align]} ${
+      className={`px-control-x py-row-y text-body align-top text-ink-secondary tabular-nums ${ALIGN_CLASSES[align]} ${
         className ?? ""
       }`}
       {...rest}

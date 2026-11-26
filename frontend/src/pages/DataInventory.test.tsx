@@ -244,6 +244,39 @@ describe("asset request", () => {
   });
 });
 
+describe("page actions", () => {
+  it("refreshes the same server-side view without changing the filters", async () => {
+    listAssets.mockResolvedValue(makePage([makeAsset()]));
+    await renderInventory();
+    expect(listAssets).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole("button", { name: /refresh list/i }));
+
+    await waitFor(() => expect(listAssets).toHaveBeenCalledTimes(2));
+    expect(listAssets).toHaveBeenLastCalledWith(
+      {
+        page: 1,
+        per_page: 20,
+        search: undefined,
+        sensitivity: undefined,
+        lifecycle_status: undefined,
+        category: undefined,
+        source_type: undefined,
+        institution_id: 1,
+      },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("offers the review queue only to an account that can read it", async () => {
+    listAssets.mockResolvedValue(makePage([makeAsset()]));
+    await renderInventory(testUser({ permissions: ["inventory:read"] }));
+
+    expect(screen.queryByRole("link", { name: /review queue/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh list/i })).toBeInTheDocument();
+  });
+});
+
 describe("asset results", () => {
   it("renders the fields of the real response", async () => {
     listAssets.mockResolvedValue(makePage([makeAsset()]));

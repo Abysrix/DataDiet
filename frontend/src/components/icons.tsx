@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { StatusTone } from "../lib/semantic";
+import { resolveStatusTone, type StatusTone, type ToneInput } from "../lib/semantic";
 
-type IconProps = { className?: string };
+/** Every glyph takes only a size class; colour is inherited from its context. */
+export type IconProps = { className?: string };
 
 function baseClass(className?: string): string {
   return className ?? "h-5 w-5";
@@ -24,6 +25,7 @@ function Glyph({ className, children }: { className?: string; children: ReactNod
       strokeLinejoin="round"
       className={baseClass(className)}
       aria-hidden="true"
+      focusable="false"
     >
       {children}
     </svg>
@@ -251,6 +253,72 @@ export function IconFilter({ className }: IconProps) {
   );
 }
 
+/** A record that can be opened and read, not a folder that can be acted on. */
+export function IconDocument({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <rect x="5" y="3" width="14" height="18" rx="1.5" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3" />
+    </Glyph>
+  );
+}
+
+/** A verified or protected state; it never implies an action was executed. */
+export function IconShield({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M12 3l7 3v6c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </Glyph>
+  );
+}
+
+/** Export or download affordance for artefacts the backend actually produced. */
+export function IconDownload({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M12 4v9" />
+      <path d="M8.5 10.5L12 14l3.5-3.5" />
+      <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3" />
+    </Glyph>
+  );
+}
+
+/** Leaves the app (a real link), rather than an in-page state change. */
+export function IconExternalLink({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M13 5h6v6" />
+      <path d="M19 5l-8 8" />
+      <path d="M18 14v4a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h4" />
+    </Glyph>
+  );
+}
+
+/** A read-only inspection affordance, safe next to a permission gate. */
+export function IconEye({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path d="M2.5 12s3.6-6 9.5-6 9.5 6 9.5 6-3.6 6-9.5 6-9.5-6-9.5-6z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </Glyph>
+  );
+}
+
+/** Scheduled or recorded dates on policies, holds and reports. */
+export function IconCalendar({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <rect x="3.5" y="5" width="17" height="16" rx="1.5" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M3.5 10h17" />
+    </Glyph>
+  );
+}
+
 export function IconCircle({ className }: IconProps) {
   return (
     <Glyph className={className}>
@@ -320,7 +388,13 @@ const STATUS_GLYPHS: Record<StatusTone, (props: IconProps) => ReactNode> = {
   critical: IconXCircle,
 };
 
-export function StatusIcon({ tone, className }: { tone: StatusTone; className?: string }) {
-  const GlyphIcon = STATUS_GLYPHS[tone];
+/**
+ * Status glyph for a semantic role. The prop accepts the same inputs as the
+ * other status surfaces: `accent` and a legacy palette name are folded onto a
+ * state role before lookup, so a call site can never make the glyph table throw
+ * while its sibling `Badge`/`Toast` quietly resolves the same value.
+ */
+export function StatusIcon({ tone, className }: { tone: ToneInput; className?: string }) {
+  const GlyphIcon = STATUS_GLYPHS[resolveStatusTone(tone)];
   return <GlyphIcon className={className} />;
 }

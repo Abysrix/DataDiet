@@ -39,6 +39,7 @@ vi.mock("../api/retention", () => ({
 import RetentionPolicies from "./RetentionPolicies";
 import Holds from "./Holds";
 import Recommendations from "./Recommendations";
+import RetrievalRequests from "./RetrievalRequests";
 import AssetAssessment from "./AssetAssessment";
 
 const POLICY: Policy = {
@@ -407,7 +408,7 @@ describe("Asset assessment detail", () => {
     });
   });
 
-  it("requests the assessment only for a role holding retention:assess", async () => {
+  it("posts only when a role holding retention:assess presses Run assessment", async () => {
     getAssessmentHistory.mockResolvedValue([]);
     assessAsset.mockResolvedValue(ASSESSMENT);
     render(
@@ -422,10 +423,16 @@ describe("Asset assessment detail", () => {
       ),
     );
 
+    const run = await screen.findByRole("button", { name: /run assessment/i });
+    expect(run).toBeEnabled();
+    // Opening the detail page is a read. An assessment is an immutable write and
+    // must never be created as a side effect of navigation.
+    expect(assessAsset).not.toHaveBeenCalled();
+    expect(screen.queryByText(/cannot run assessments/i)).not.toBeInTheDocument();
+
+    await userEvent.click(run);
     await waitFor(() => expect(assessAsset).toHaveBeenCalledTimes(1));
     expect(assessAsset).toHaveBeenLastCalledWith(3);
-    expect(await screen.findByRole("button", { name: /run assessment/i })).toBeEnabled();
-    expect(screen.queryByText(/cannot run assessments/i)).not.toBeInTheDocument();
   });
 
   it("shows an unauthorized state and sends no assessment POST for a viewer", async () => {
@@ -533,13 +540,93 @@ describe("Request lifecycle on the retention screens", () => {
     await screen.findByText(/Assessment - asset #3/);
     expect(getAssessmentHistory).toHaveBeenCalledTimes(1);
     expect(getAssessmentHistory).toHaveBeenLastCalledWith(3, expect.any(AbortSignal));
-    expect(assessAsset).toHaveBeenLastCalledWith(3);
+    expect(assessAsset).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: /run assessment/i }));
+    await waitFor(() => expect(assessAsset).toHaveBeenLastCalledWith(3));
 
     await userEvent.click(screen.getByRole("button", { name: /open asset 4/i }));
     await screen.findByText(/Assessment - asset #4/);
 
-    expect(getAssessmentHistory).toHaveBeenCalledTimes(2);
+    // One initial read, one refresh after the explicit POST, one read for #4.
+    expect(getAssessmentHistory).toHaveBeenCalledTimes(3);
     expect(getAssessmentHistory).toHaveBeenLastCalledWith(4, expect.any(AbortSignal));
-    expect(assessAsset).toHaveBeenLastCalledWith(4);
+    // Navigating to another asset is still a read; it must not inherit the
+    // previous asset's explicit mutation.
+    expect(assessAsset).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole("button", { name: /run assessment/i }));
+    await waitFor(() => expect(assessAsset).toHaveBeenLastCalledWith(4));
+    expect(assessAsset).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("RetrievalRequests screen", () => {
+  function renderRetrieval(user = testUser()) {
+    return render(withAuth(<MemoryRouter><RetrievalRequests /></MemoryRouter>, user));
+  }
+
+  it("states plainly that retrieval is not implemented without faking a workflow", () => {
+    renderRetrieval();
+
+    expect(screen.getByRole("heading", { level: 1, name: "Retrieval Requests" })).toBeInTheDocument();
+    expect(screen.getByText("Not implemented")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Retrieval is not implemented" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "This page does not call an API, create a request, contact a source system or restore any object.",
+    );
+    expect(screen.getByText(/no list, loading or error state to show/i)).toBeInTheDocument();
+
+    // No form, submit, approve, fulfil or restore control is offered.
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    // The explicit negation above is the only mention of those states; there is
+    // no success banner, alert or fabricated status of its own.
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // Nothing on this page reaches an API; every mock stays untouched.
+    for (const api of [
+      listPolicies,
+      createPolicy,
+      createPolicyVersion,
+      activatePolicyVersion,
+      listHolds,
+      createHold,
+      releaseHold,
+      assessAsset,
+      getAssessmentHistory,
+      listRecommendations,
+    ]) {
+      expect(api).not.toHaveBeenCalled();
+    }
+  });
+
+  it("links only to read-only areas the account can actually open", () => {
+    renderRetrieval();
+
+    expect(screen.getByRole("link", { name: "Read-only review queue" })).toHaveAttribute(
+      "href",
+      "/recommendations",
+    );
+    expect(screen.getByRole("link", { name: "Review queue" })).toHaveAttribute(
+      "href",
+      "/recommendations",
+    );
+    expect(screen.getByRole("link", { name: "Retention holds" })).toHaveAttribute("href", "/holds");
+    expect(screen.getByRole("link", { name: "Classification evidence" })).toHaveAttribute(
+      "href",
+      "/classification",
+    );
+  });
+
+  it("offers no destination when the account lacks the read permissions", () => {
+    renderRetrieval(testUser({ permissions: [] }));
+
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText(/no read permission for the lifecycle areas/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

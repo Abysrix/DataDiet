@@ -1,20 +1,18 @@
 /**
- * Unified asset governance view (Phase 6).
+ * Unified asset governance view (redesign Phase 5).
  *
- * One screen combining, for a single authorized asset: inventory metadata,
- * source-record mappings and the latest scan, the latest classification
- * proposal, data-quality findings, the applicable retention policy and exact
- * version, the latest retention assessment and its history, active holds, and
- * the append-only human review decisions.
+ * One screen answers one question for one authorized asset: what is the current
+ * governance state, what decision can be recorded, and what evidence supports
+ * it. Hierarchy is counts → decision → evidence → provenance and caveats.
  *
- * The view is explicit about provenance: observed source metadata, system
- * proposals, assessments, and human decisions are labelled separately, and any
- * unavailable value is shown as unknown rather than invented. Recording a
- * decision executes no file operation - no archive, restore, move, or delete.
+ * Every value is labelled by origin — observed source metadata, system
+ * proposal, assessment, or human decision. Missing values stay unknown.
+ * Recording a decision executes no file operation: no archive, restore, move
+ * or delete exists anywhere in this product.
  */
 
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
 import { ApiError, toErrorMessage } from "../api/client";
 import { fetchAssetGovernance } from "../api/governance";
 import { assessAsset, createDecision, listSupersessionCandidates } from "../api/retention";
@@ -25,21 +23,40 @@ import type {
   GovernanceDetail,
   GovernanceProvenance,
   GovernanceReviewContext,
+  Hold,
+  QualityFinding,
 } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
+import { Field } from "../components/ui/Field";
+import { Select } from "../components/ui/Select";
 import { Spinner } from "../components/ui/Spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from "../components/ui/Table";
+import { Textarea } from "../components/ui/Textarea";
+import { TONE_SURFACE } from "../components/ui/statusClasses";
+import { IconChevronRight, IconHold, IconRefresh, StatusIcon } from "../components/icons";
 import { formatBytes, formatDate, humanize } from "../lib/format";
 import {
+  statusLabel,
+  toneForConfidence,
   toneForDecision,
   toneForHoldStatus,
   toneForRecommendation,
   toneForSeverity,
+  type StatusTone,
 } from "../lib/semantic";
 
 const DECISION_OPTIONS: Array<{ value: DecisionValue; label: string }> = [
@@ -49,6 +66,45 @@ const DECISION_OPTIONS: Array<{ value: DecisionValue; label: string }> = [
   { value: "reject", label: "Reject recommendation" },
 ];
 
+const PRIMARY_LINK =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-control bg-accent px-control-x py-control-y text-body font-medium text-on-accent transition-colors hover:bg-accent-hover";
+const SECONDARY_LINK =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-control bg-surface px-control-x py-control-y text-body font-medium text-ink ring-1 ring-inset ring-line-strong transition-colors hover:bg-surface-hover";
+
+/** A status panel whose glyph, surface and ink all come from the one tone table. */
+function Notice({
+  tone,
+  title,
+  children,
+}: {
+  tone: StatusTone;
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      role="note"
+      className={`flex items-start gap-2 rounded-control px-card-x py-stack text-supporting ring-1 ring-inset ${TONE_SURFACE[tone]}`}
+    >
+      <StatusIcon tone={tone} className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-semibold">{title}</p>
+        {children ? <div className="mt-0.5">{children}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+/** One observed or proposed value in a definition list. */
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-meta font-medium text-ink-muted">{label}</dt>
+      <dd className="mt-0.5 break-words text-body text-ink">{value}</dd>
+    </div>
+  );
+}
+
 export default function AssetGovernance() {
   const params = useParams();
   const assetId = Number(params.assetId);
@@ -57,10 +113,7 @@ export default function AssetGovernance() {
     return (
       <div>
         <PageHeader title="Asset Governance" />
-        <ErrorState
-          title="Invalid asset id"
-          message="The asset id must be a positive integer."
-        />
+        <ErrorState title="Invalid asset id" message="The asset id must be a positive integer." />
       </div>
     );
   }
@@ -69,589 +122,230 @@ export default function AssetGovernance() {
 }
 
 function GovernanceView({ assetId }: { assetId: number }) {
-  const { activeInstitutionId } = useAuth();
+  const { activeInstitutionId, has } = useAuth();
   const { data, loading, error, refetch } = useApiQuery(
     (signal) => fetchAssetGovernance(assetId, activeInstitutionId ?? undefined, signal),
     [assetId, activeInstitutionId],
   );
 
+  const decisionOpen =
+    data !== null &&
+    data.review_context.latest_assessment_id !== null &&
+    has("review:decide") &&
+    !data.decisions.some(
+      (item) => item.assessment_id === data.review_context.latest_assessment_id,
+    );
+
   return (
-    <div>
+    <div className="space-y-gutter">
       <PageHeader
         title={`Asset Governance — #${assetId}`}
         description="Consolidated governance context for one asset: source and discovery, classification and data quality, applicable policy and version, retention assessment, holds, and the append-only record of human decisions. Nothing here archives, restores, moves, or deletes a file."
-      />
-
-      {loading ? <Spinner label="Loading governance view..." /> : null}
-      {error ? (
-        <ErrorState
-          title="Governance view unavailable"
-          message={error}
-          onRetry={refetch}
-        />
-      ) : null}
-
-      {data ? (
-        <div className="space-y-6">
-          <ProvenanceBanner provenance={data.provenance} />
-          <AssetCard detail={data} />
-          <SourceCard detail={data} />
-          <ClassificationCard detail={data} />
-          <QualityCard detail={data} />
-          <PolicyCard detail={data} />
-          <HoldsCard detail={data} />
-          <AssessmentCard detail={data} onChanged={refetch} />
-          <DecisionHistoryCard
-            decisions={data.decisions}
-            effectiveDecisionId={data.effective_decision_id}
-          />
-          <ReviewDecisionCard detail={data} onRecorded={refetch} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/* --------------------------------- provenance ----------------------------- */
-
-function ProvenanceBanner({ provenance }: { provenance: GovernanceProvenance }) {
-  return (
-    <Card className="border-indigo-200 bg-indigo-50/40">
-      <CardBody>
-        <h2 className="text-xs font-semibold tracking-wide text-indigo-900 uppercase">
-          Provenance
-        </h2>
-        <dl className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-4">
-          <div>
-            <dt className="font-medium text-slate-500">Observed source metadata</dt>
-            <dd>{provenance.observed.join(", ") || "—"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-slate-500">System proposals</dt>
-            <dd>{provenance.system_proposed.join(", ") || "none recorded"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-slate-500">Assessments</dt>
-            <dd>{provenance.assessed.join(", ") || "none recorded"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-slate-500">Human decisions</dt>
-            <dd>{provenance.human_decisions.join(", ") || "none recorded"}</dd>
-          </div>
-        </dl>
-        <p className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-indigo-100 ring-inset">
-          File operations: {provenance.file_operations}
-        </p>
-      </CardBody>
-    </Card>
-  );
-}
-
-/* ----------------------------------- asset -------------------------------- */
-
-function AssetCard({ detail }: { detail: GovernanceDetail }) {
-  const { asset } = detail;
-  return (
-    <Card>
-      <CardHeader
-        title="Inventory metadata (observed)"
-        description="Values as recorded from the source. Missing metadata is shown as unknown and never treated as low risk."
-      />
-      <CardBody>
-        <h3 className="text-base font-semibold text-slate-900">{asset.title}</h3>
-        {asset.description ? (
-          <p className="mt-1 mb-3 text-sm text-slate-600">{asset.description}</p>
-        ) : (
-          <div className="mb-3" />
-        )}
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
-          <Field label="External id" value={asset.external_id} />
-          <Field label="Record type" value={asset.record_type} />
-          <Field label="Category" value={asset.category ?? "unknown"} />
-          <Field label="Sensitivity" value={humanize(asset.sensitivity)} />
-          <Field
-            label="Contains personal data"
-            value={asset.contains_personal_data ? "Yes" : "No"}
-          />
-          <Field label="Lifecycle status" value={humanize(asset.lifecycle_status)} />
-          <Field label="File name" value={asset.file_name ?? "unknown"} />
-          <Field label="MIME type" value={asset.mime_type ?? "unknown"} />
-          <Field
-            label="Size"
-            value={asset.size_bytes > 0 ? formatBytes(asset.size_bytes) : "unknown"}
-          />
-          <Field label="Owner team" value={asset.owner_team ?? "unassigned"} />
-          <Field
-            label="Checksum"
-            value={asset.checksum_sha256 ? `${asset.checksum_sha256.slice(0, 16)}…` : "unknown"}
-          />
-          <Field
-            label="Last reviewed"
-            value={asset.last_reviewed ? formatDate(asset.last_reviewed) : "never"}
-          />
-        </dl>
-      </CardBody>
-    </Card>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="text-slate-900">{value}</dd>
-    </div>
-  );
-}
-
-/* ----------------------------------- source ------------------------------- */
-
-function SourceCard({ detail }: { detail: GovernanceDetail }) {
-  const { source } = detail;
-  return (
-    <Card>
-      <CardHeader
-        title="Source & discovery"
-        description="Where the record came from and when it was last observed. Scan results describe discovery, not a file operation."
-      />
-      <CardBody className="space-y-3 text-sm">
-        <dl className="grid gap-3 sm:grid-cols-3">
-          <Field label="Data source" value={source.data_source_name ?? "unavailable"} />
-          <Field label="Source type" value={source.source_type ?? "unknown"} />
-          <Field label="Connector" value={source.connector_type ?? "unavailable"} />
-        </dl>
-
-        {source.notes.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-5 text-xs text-amber-800">
-            {source.notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        ) : null}
-
-        {source.mappings.length > 0 ? (
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
-              Source-record mappings ({source.mappings.length})
-            </h3>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {source.mappings.map((mapping) => (
-                <li key={mapping.mapping_id} className="px-4 py-2">
-                  <div className="font-mono text-xs text-slate-600">{mapping.source_key}</div>
-                  <div className="text-xs text-slate-500">
-                    observed {mapping.observation_count}× · last seen{" "}
-                    {mapping.last_seen_at ? formatDate(mapping.last_seen_at.slice(0, 10)) : "unknown"}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {source.latest_scan ? (
-          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-            <span className="font-medium text-slate-900">
-              Latest scan #{source.latest_scan.scan_job_id}
-            </span>{" "}
-            · status {source.latest_scan.status} · discovered {source.latest_scan.total_discovered} ·
-            imported {source.latest_scan.total_imported} · skipped {source.latest_scan.total_skipped}
-          </div>
-        ) : (
-          <p className="text-xs text-slate-500">
-            No discovery run is recorded for this source; the asset may have been created directly.
-          </p>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-/* ------------------------------- classification --------------------------- */
-
-function ClassificationCard({ detail }: { detail: GovernanceDetail }) {
-  const result = detail.classification;
-  return (
-    <Card>
-      <CardHeader
-        title="Classification (system proposal)"
-        description="A deterministic, explainable proposal computed from inventoried metadata only. It is advisory and is never applied to the source record automatically."
-      />
-      <CardBody>
-        {result === null ? (
-          <EmptyState
-            title="Not classified"
-            message="No classification proposal has been recorded for this asset. An unclassified asset is an explicit unknown, never a low-risk one."
-          />
-        ) : (
-          <div className="space-y-3 text-sm">
+        actions={
+          data ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="accent">{humanize(result.outcome)}</Badge>
-              <Badge tone={result.confidence === "high" ? "success" : "neutral"}>
-                confidence {result.confidence}
-              </Badge>
-              <span className="text-xs text-slate-500">
-                {result.rule_version} · {formatDate(result.classified_at.slice(0, 10))}
-              </span>
+              {decisionOpen ? (
+                <a href="#review-decision" className={PRIMARY_LINK}>
+                  Review decision
+                  <IconChevronRight className="h-4 w-4" />
+                </a>
+              ) : null}
+              {has("retention:read") ? (
+                <Link to={`/assessments/${assetId}`} className={SECONDARY_LINK}>
+                  Assessment detail
+                </Link>
+              ) : null}
+              <Button
+                variant="ghost"
+                onClick={refetch}
+                disabled={loading}
+                className="gap-1.5"
+              >
+                <IconRefresh className="h-4 w-4" />
+                Refresh view
+              </Button>
             </div>
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <Field label="Proposed category" value={result.proposed_category ?? "unclassified"} />
-              <Field
-                label="Proposed sensitivity"
-                value={humanize(result.proposed_sensitivity)}
-              />
-            </dl>
-            <p className="text-slate-700">{result.confidence_meaning}</p>
-            {result.warnings.length > 0 ? (
-              <p className="text-xs text-amber-800">
-                {result.warnings.length} warning{result.warnings.length === 1 ? "" : "s"} recorded.
-              </p>
-            ) : null}
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-/* -------------------------------- data quality ---------------------------- */
-
-function QualityCard({ detail }: { detail: GovernanceDetail }) {
-  const findings = detail.quality_findings;
-  return (
-    <Card>
-      <CardHeader
-        title="Data quality & remediation"
-        description="Deterministic metadata checks with suggested remediation. A finding describes metadata, never a file."
+          ) : undefined
+        }
       />
-      <CardBody>
-        {findings.length === 0 ? (
-          <EmptyState
-            title="No quality findings"
-            message="Every documented check passed for this asset. That does not prove the metadata is complete or correct."
-          />
-        ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {findings.map((finding, index) => (
-              <li key={`${finding.check}-${index}`} className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={toneForSeverity(finding.severity)}>
-                    {finding.severity}
-                  </Badge>
-                  <span className="font-mono text-xs text-slate-600">{finding.check}</span>
-                </div>
-                <p className="mt-1 text-sm text-slate-800">{finding.message}</p>
-                <p className="mt-1 text-xs text-slate-500">Remediation: {finding.remediation}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardBody>
-    </Card>
+
+      {loading && data === null ? <Spinner label="Loading governance view..." /> : null}
+      {error ? (
+        <ErrorState title="Governance view unavailable" message={error} onRetry={refetch} />
+      ) : null}
+
+      {data ? <GovernanceContent detail={data} onChanged={refetch} /> : null}
+    </div>
   );
 }
 
-/* ----------------------------------- policy ------------------------------- */
-
-function PolicyCard({ detail }: { detail: GovernanceDetail }) {
-  const policy = detail.applicable_policy;
-  return (
-    <Card>
-      <CardHeader
-        title="Applicable policy & version"
-        description="The single active policy that matches this asset, and the exact immutable version that applies. A missing policy never implies disposal."
-      />
-      <CardBody>
-        {policy === null ? (
-          <EmptyState
-            title="No applicable policy"
-            message="No active policy matches this asset. Missing policy coverage is an explicit gap: it never authorizes disposal, and retention review is required."
-          />
-        ) : (
-          <dl className="grid gap-3 text-sm sm:grid-cols-3">
-            <Field label="Policy" value={`${policy.name} (${policy.status})`} />
-            <Field
-              label="Version"
-              value={
-                policy.version_id !== null
-                  ? `#${policy.version_id}${
-                      policy.version_number !== null ? ` (v${policy.version_number})` : ""
-                    }`
-                  : "none"
-              }
-            />
-            <Field
-              label="Retention period"
-              value={
-                policy.retention_period_days !== null
-                  ? `${policy.retention_period_days} days`
-                  : "unspecified"
-              }
-            />
-            <Field label="Trigger" value={policy.retention_trigger ?? "unspecified"} />
-            <Field
-              label="Recommended action"
-              value={policy.recommended_action ?? "unspecified"}
-            />
-            <Field
-              label="Categories"
-              value={
-                policy.applicable_categories && policy.applicable_categories.length > 0
-                  ? policy.applicable_categories.join(", ")
-                  : "any"
-              }
-            />
-          </dl>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-/* ----------------------------------- holds -------------------------------- */
-
-function HoldsCard({ detail }: { detail: GovernanceDetail }) {
-  const holds = detail.active_holds;
-  return (
-    <Card className={holds.length > 0 ? "border-rose-300" : undefined}>
-      <CardHeader
-        title="Active holds"
-        description="A hold overrides incompatible lifecycle recommendations. Releasing a hold never rewrites history."
-      />
-      <CardBody>
-        {holds.length === 0 ? (
-          <p className="text-sm text-slate-600">No active holds block this asset.</p>
-        ) : (
-          <div className="space-y-3">
-            <div
-              role="status"
-              className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900"
-            >
-              {holds.length} active hold{holds.length === 1 ? "" : "s"} block approving any
-              lifecycle-advancing recommendation. Retain, request more information, or reject
-              remain available.
-            </div>
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {holds.map((hold) => (
-                <li key={hold.id} className="px-4 py-3 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={toneForHoldStatus(hold.status)}>{hold.status}</Badge>
-                    <span className="font-medium text-slate-900">{hold.name}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {hold.hold_type ?? "hold"}
-                    {hold.legal_basis ? ` · ${hold.legal_basis}` : ""}
-                    {hold.asset_id === null ? " · institution-wide" : ""}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-/* -------------------------------- assessment ------------------------------ */
-
-function AssessmentCard({
+function GovernanceContent({
   detail,
   onChanged,
 }: {
   detail: GovernanceDetail;
   onChanged: () => void;
 }) {
-  const { has } = useAuth();
-  const [running, setRunning] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
-
-  async function runAssessment(): Promise<void> {
-    setRunning(true);
-    setRunError(null);
-    try {
-      await assessAsset(detail.asset.id);
-      onChanged();
-    } catch (cause) {
-      setRunError(toErrorMessage(cause));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const latest = detail.latest_assessment;
   return (
-    <Card>
-      <CardHeader
-        title="Retention assessment"
-        description="Explainable assessments: each records the policy version, findings, and holds that applied. Re-running stores a new immutable entry."
-        action={
-          has("retention:assess") ? (
-            <button
-              type="button"
-              onClick={() => void runAssessment()}
-              disabled={running}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {running ? "Assessing..." : "Run assessment"}
-            </button>
-          ) : null
-        }
+    <div className="space-y-gutter">
+      <MetricLedger
+        metrics={[
+          {
+            label: "Active holds",
+            value: detail.active_holds.length,
+            hint: "Block lifecycle-advancing decisions",
+          },
+          {
+            label: "Quality findings",
+            value: detail.quality_findings.length,
+            hint: "Deterministic metadata checks",
+          },
+          {
+            label: "Assessments",
+            value: detail.assessment_history.length,
+            hint: "Immutable, versioned entries",
+          },
+          {
+            label: "Human decisions",
+            value: detail.decisions.length,
+            hint: "Append-only record",
+          },
+        ]}
       />
-      <CardBody className="space-y-4">
-        {runError ? (
-          <ErrorState title="Assessment failed" message={runError} onRetry={() => void runAssessment()} />
-        ) : null}
 
-        {latest === null ? (
-          <EmptyState
-            title="No assessment recorded"
-            message="Run an assessment to produce the first explainable retention recommendation for this asset."
-          />
-        ) : (
-          <AssessmentDetail assessment={latest} />
-        )}
-
-        {detail.assessment_history.length > 1 ? (
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
-              History ({detail.assessment_history.length})
-            </h3>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {detail.assessment_history.map((assessment, index) => (
-                <li
-                  key={`${assessment.assessed_at}-${index}`}
-                  className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-slate-500"
-                >
-                  <Badge tone={toneForRecommendation(assessment.recommendation)}>
-                    {assessment.recommendation.replaceAll("_", " ")}
-                  </Badge>
-                  <span>
-                    {formatDate(assessment.assessed_at.slice(0, 10))} · rule set{" "}
-                    {assessment.rule_set}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </CardBody>
-    </Card>
-  );
-}
-
-function AssessmentDetail({ assessment }: { assessment: Assessment }) {
-  return (
-    <div className="space-y-3 text-sm">
-      <div className="flex flex-wrap items-center gap-3">
-        <Badge tone={toneForRecommendation(assessment.recommendation)}>
-          {assessment.recommendation.replaceAll("_", " ")}
-        </Badge>
-        <span className="text-xs text-slate-500">
-          {assessment.rule_set} · assessed {formatDate(assessment.assessed_at.slice(0, 10))}
-        </span>
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
+        <CurrentStateCard detail={detail} className="xl:col-span-3" />
+        <ReviewDecisionCard detail={detail} onRecorded={onChanged} className="xl:col-span-2" />
       </div>
-      <p className="text-slate-700">{assessment.rationale}</p>
-      <dl className="grid gap-3 sm:grid-cols-3">
-        <Field
-          label="Policy version"
-          value={
-            assessment.policy_version_id !== null
-              ? `#${assessment.policy_version_id}${
-                  assessment.policy_version_number !== null
-                    ? ` (v${assessment.policy_version_number})`
-                    : ""
-                }`
-              : "none"
-          }
-        />
-        <Field
-          label="Retention deadline"
-          value={
-            assessment.retention_deadline ? formatDate(assessment.retention_deadline) : "not set"
-          }
-        />
-        <Field
-          label="Holds at assessment time"
-          value={String(assessment.holds_active)}
-        />
-      </dl>
-      {assessment.findings.length > 0 ? (
-        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-          {assessment.findings.map((finding) => (
-            <li key={finding.code} className="px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={toneForSeverity(finding.severity)}>
-                  {finding.severity}
-                </Badge>
-                <span className="font-mono text-xs text-slate-600">{finding.code}</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-800">{finding.message}</p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+
+      <div className="space-y-stack">
+        <p className="text-section font-semibold text-ink">Evidence behind the state</p>
+        <div className="grid grid-cols-1 gap-gutter md:grid-cols-2 xl:grid-cols-3">
+          <PolicyCard detail={detail} />
+          <AssessmentEvidenceCard detail={detail} onChanged={onChanged} />
+          <HoldsCard detail={detail} />
+          <ClassificationCard detail={detail} />
+          <QualityCard detail={detail} />
+          <SourceCard detail={detail} />
+          <InventoryCard detail={detail} />
+        </div>
+      </div>
+
+      <DecisionHistoryCard
+        decisions={detail.decisions}
+        effectiveDecisionId={detail.effective_decision_id}
+      />
+      <ProvenanceCard provenance={detail.provenance} />
     </div>
   );
 }
 
-/* ----------------------------- decision history --------------------------- */
-
-function DecisionHistoryCard({
-  decisions,
-  effectiveDecisionId,
+function MetricLedger({
+  metrics,
 }: {
-  decisions: Decision[];
-  effectiveDecisionId: number | null;
+  metrics: Array<{ label: string; value: string | number; hint: string }>;
 }) {
   return (
-    <Card>
+    <section
+      aria-labelledby="governance-metrics"
+      className="overflow-hidden rounded-card border border-line bg-line shadow-card"
+    >
+      <h2 id="governance-metrics" className="sr-only">
+        Governance at a glance
+      </h2>
+      <dl className="grid grid-cols-1 gap-px sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="bg-surface px-card-x py-card-y">
+            <dt className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-ink-muted">
+              {metric.label}
+            </dt>
+            <dd className="mt-2 text-display font-semibold tabular-nums text-ink">
+              {metric.value}
+            </dd>
+            <dd className="mt-1 text-meta text-ink-muted">{metric.hint}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+/* --------------------------- current state and decision -------------------- */
+
+function CurrentStateCard({
+  detail,
+  className,
+}: {
+  detail: GovernanceDetail;
+  className?: string;
+}) {
+  const latest = detail.latest_assessment;
+  const governing = [...detail.decisions]
+    .filter((item) => item.id === detail.effective_decision_id)
+    .at(0);
+
+  return (
+    <Card className={className}>
       <CardHeader
-        title={`Review decisions (${decisions.length})`}
-        description="Append-only history. A decision is never edited or erased: a superseded decision stays visible and points at the correction that replaced it. The effective decision is the newest one that has not been superseded."
+        title="Current state & decision"
+        description="Advisory recommendation and the human outcome that governs this asset."
+        action={
+          latest ? (
+            <Badge tone={toneForRecommendation(latest.recommendation)}>
+              {statusLabel(latest.recommendation)}
+            </Badge>
+          ) : undefined
+        }
       />
-      <CardBody>
-        {decisions.length === 0 ? (
-          <p className="text-sm text-slate-600">No human decision has been recorded yet.</p>
+      <CardBody className="space-y-stack">
+        {latest ? (
+          <p className="text-body text-ink-secondary">{latest.rationale}</p>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {decisions.map((decision) => (
-              <li key={decision.id} className="px-4 py-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={toneForDecision(decision.decision)}>
-                    {decision.decision.replaceAll("_", " ")}
-                  </Badge>
-                  {decision.id === effectiveDecisionId ? (
-                    <Badge tone="success">Effective</Badge>
-                  ) : null}
-                  {decision.is_superseded ? <Badge tone="warning">Superseded</Badge> : null}
-                  <span className="text-xs text-slate-500">
-                    reviewer {decision.reviewer} · {formatDate(decision.decided_at.slice(0, 10))} ·
-                    assessment #{decision.assessment_id}
-                  </span>
-                </div>
-                <p className="mt-1 text-slate-700">{decision.reason}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Reviewed recommendation:{" "}
-                  {decision.recommendation_reviewed.replaceAll("_", " ")}
-                  {decision.policy_version_id !== null
-                    ? ` · policy version #${decision.policy_version_id}`
-                    : ""}
-                </p>
-                {decision.supersedes_decision_id !== null ? (
-                  <p className="mt-1 text-xs text-indigo-700">
-                    Corrects decision #{decision.supersedes_decision_id}; the earlier decision
-                    stays in this history.
-                  </p>
-                ) : null}
-                {decision.superseded_by_decision_id !== null ? (
-                  <p className="mt-1 text-xs text-amber-800">
-                    Superseded by decision #{decision.superseded_by_decision_id}.
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <EmptyState
+            title="No assessment recorded"
+            message="Run an assessment to produce the first explainable retention recommendation. A decision without an assessment would have no version context to audit."
+          />
         )}
+
+        {detail.active_holds.length > 0 ? (
+          <Notice
+            tone="critical"
+            title={`${detail.active_holds.length} active hold${
+              detail.active_holds.length === 1 ? "" : "s"
+            } block approving a lifecycle-advancing recommendation`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <IconHold className="h-3.5 w-3.5" />
+              Retain, request more information, or reject remain available.
+            </span>
+          </Notice>
+        ) : null}
+
+        {governing ? (
+          <div className="rounded-control border border-line bg-surface-sunken px-card-x py-stack">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={toneForDecision(governing.decision)}>
+                {statusLabel(governing.decision)}
+              </Badge>
+              <span className="text-meta text-ink-muted">Governing human decision</span>
+            </div>
+            <p className="mt-1.5 text-body text-ink-secondary">{governing.reason}</p>
+            <p className="mt-1 text-meta text-ink-muted">
+              {governing.reviewer} · {formatDate(governing.decided_at.slice(0, 10))} · assessment #
+              {governing.assessment_id}
+            </p>
+          </div>
+        ) : (
+          <p className="text-supporting text-ink-muted">
+            No human decision has been recorded for this asset yet.
+          </p>
+        )}
+
+        <p className="text-meta text-ink-muted">
+          A recorded decision executes nothing: this product has no archive, restore, move or
+          delete operation. Approval endorses a recommendation for a later, separately authorized
+          workflow only.
+        </p>
       </CardBody>
     </Card>
   );
@@ -662,16 +356,18 @@ function DecisionHistoryCard({
 function ReviewDecisionCard({
   detail,
   onRecorded,
+  className,
 }: {
   detail: GovernanceDetail;
   onRecorded: () => void;
+  className?: string;
 }) {
   const { has, user } = useAuth();
   const context = detail.review_context;
 
   if (context.latest_assessment_id === null) {
     return (
-      <Card>
+      <Card className={className}>
         <CardHeader
           title="Record a review decision"
           description="A decision always references a specific assessment and policy version."
@@ -688,7 +384,7 @@ function ReviewDecisionCard({
 
   if (!has("review:decide")) {
     return (
-      <Card>
+      <Card className={className}>
         <CardHeader
           title="Record a review decision"
           description="Recording decisions is restricted to the reviewer role."
@@ -713,7 +409,7 @@ function ReviewDecisionCard({
   );
   if (decidedLatestAssessment) {
     return (
-      <Card>
+      <Card className={className}>
         <CardHeader title="Record a review decision" />
         <CardBody>
           <EmptyState
@@ -725,17 +421,26 @@ function ReviewDecisionCard({
     );
   }
 
-  return <DecisionForm detail={detail} context={context} onRecorded={onRecorded} />;
+  return (
+    <DecisionForm
+      detail={detail}
+      context={context}
+      onRecorded={onRecorded}
+      className={className}
+    />
+  );
 }
 
 function DecisionForm({
   detail,
   context,
   onRecorded,
+  className,
 }: {
   detail: GovernanceDetail;
   context: GovernanceReviewContext;
   onRecorded: () => void;
+  className?: string;
 }) {
   const assessmentId = context.latest_assessment_id as number;
   const holdsActive = detail.active_holds.length;
@@ -809,8 +514,14 @@ function DecisionForm({
     }
   }
 
+  const conflictTitle = conflict?.startsWith("stale_review_conflict")
+    ? "This review is out of date"
+    : conflict?.startsWith("hold_conflict")
+      ? "Blocked by an active hold"
+      : "Conflict";
+
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader
         title="Record a review decision"
         description="A human decision, recorded against the exact assessment and policy version shown. It executes nothing: approval endorses a recommendation for a later, separately authorized workflow only."
@@ -819,36 +530,26 @@ function DecisionForm({
         {conflict ? (
           <div
             role="alert"
-            className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            className="mb-stack rounded-control border border-warning-line bg-warning-surface px-card-x py-stack text-supporting text-warning-ink"
           >
-            <p className="font-semibold">
-              {conflict.startsWith("stale_review_conflict")
-                ? "This review is out of date"
-                : conflict.startsWith("hold_conflict")
-                  ? "Blocked by an active hold"
-                  : "Conflict"}
-            </p>
+            <p className="font-semibold">{conflictTitle}</p>
             <p className="mt-1">{conflict}</p>
-            <button
-              type="button"
-              onClick={onRecorded}
-              className="mt-3 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-amber-800 ring-1 ring-amber-300 ring-inset hover:bg-amber-100"
-            >
-              Reload governance view
-            </button>
+            <div className="mt-3">
+              <Button variant="secondary" size="sm" onClick={onRecorded}>
+                Reload governance view
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {error ? (
-          <div role="alert" className="mb-4">
+          <div className="mb-stack">
             <ErrorState title="Decision not recorded" message={error} />
           </div>
         ) : null}
 
-        <div className="mb-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          <p className="font-medium text-slate-900">
-            Deciding against assessment #{assessmentId}
-          </p>
+        <div className="mb-stack rounded-control border border-line bg-surface-sunken px-card-x py-stack text-meta text-ink-secondary">
+          <p className="font-medium text-ink">Deciding against assessment #{assessmentId}</p>
           <p className="mt-1">
             Assessed{" "}
             {context.expected_assessed_at
@@ -865,116 +566,656 @@ function DecisionForm({
         </div>
 
         {holdsActive > 0 ? (
-          <div
-            role="status"
-            className="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900"
-          >
-            {holdsActive} active hold{holdsActive === 1 ? "" : "s"} block approving a
-            lifecycle-advancing recommendation for this asset.
+          <div className="mb-stack">
+            <Notice
+              tone="critical"
+              title={`${holdsActive} active hold${
+                holdsActive === 1 ? "" : "s"
+              } block approving a lifecycle-advancing recommendation`}
+            />
           </div>
         ) : null}
 
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="decision-value"
-              className="block text-xs font-medium text-slate-500"
-            >
-              Decision
-            </label>
-            <select
-              id="decision-value"
-              value={decision}
-              onChange={(event) => setDecision(event.target.value as DecisionValue)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none sm:max-w-md"
-            >
-              {DECISION_OPTIONS.map((option) => (
-                <option
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.value === "approve_for_later_workflow" && holdsActive > 0}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {options.length > 0 ? (
-            <div>
-              <label
-                htmlFor="decision-supersedes"
-                className="block text-xs font-medium text-slate-500"
+        <form onSubmit={submit} className="space-y-stack">
+          <Field label="Decision">
+            {(control) => (
+              <Select
+                {...control}
+                value={decision}
+                onChange={(event) => setDecision(event.target.value as DecisionValue)}
               >
-                Correction
-              </label>
-              <select
-                id="decision-supersedes"
-                value={supersedes ?? ""}
-                onChange={(event) => setSupersedes(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none sm:max-w-md"
-              >
-                <option value="">
-                  Independent decision — does not replace any earlier decision
-                </option>
-                {options.map((option) => (
-                  <option key={option.id} value={String(option.id)}>
-                    Supersede decision #{option.id} — {option.decision.replaceAll("_", " ")} on{" "}
-                    {formatDate(option.decided_at.slice(0, 10))} (assessment #
-                    {option.assessment_id})
+                {DECISION_OPTIONS.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.value === "approve_for_later_workflow" && holdsActive > 0}
+                  >
+                    {option.label}
                   </option>
                 ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
-                {supersedesId !== null
+              </Select>
+            )}
+          </Field>
+
+          {options.length > 0 ? (
+            <Field
+              label="Correction"
+              hint={
+                supersedesId !== null
                   ? `Superseding decision #${supersedesId}: it stays in the history marked as superseded, and your decision becomes the effective one. A substantive rationale is required.`
-                  : "Earlier decisions stay in the history; a superseded decision is marked and points at its replacement."}
-              </p>
-            </div>
+                  : "Earlier decisions stay in the history; a superseded decision is marked and points at its replacement."
+              }
+            >
+              {(control) => (
+                <Select
+                  {...control}
+                  value={supersedes ?? ""}
+                  onChange={(event) => setSupersedes(event.target.value)}
+                >
+                  <option value="">
+                    Independent decision — does not replace any earlier decision
+                  </option>
+                  {options.map((option) => (
+                    <option key={option.id} value={String(option.id)}>
+                      Supersede decision #{option.id} — {statusLabel(option.decision)} on{" "}
+                      {formatDate(option.decided_at.slice(0, 10))} (assessment #
+                      {option.assessment_id})
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
           ) : null}
 
-          <div>
-            <label htmlFor="decision-reason" className="block text-xs font-medium text-slate-500">
-              Rationale{requiresSubstantiveReason ? " (required)" : ""}
-            </label>
-            <textarea
-              id="decision-reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              rows={3}
-              aria-invalid={reasonTooShort}
-              aria-describedby="decision-reason-help"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
-              placeholder="Explain the reasoning behind this decision."
-            />
-            <p id="decision-reason-help" className="mt-1 text-xs text-slate-500">
-              {reasonTooShort
+          <Field
+            label="Rationale"
+            hint={
+              reasonTooShort
                 ? "A rejection, request for more information, or correction needs a substantive rationale (at least 10 characters)."
-                : "Recorded with the decision; it is not copied into the audit log."}
-            </p>
-          </div>
+                : "Recorded with the decision; it is not copied into the audit log."
+            }
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                invalid={reasonTooShort}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                rows={3}
+                placeholder="Explain the reasoning behind this decision."
+              />
+            )}
+          </Field>
 
-          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-            <p className="font-medium text-slate-900">Reviewer</p>
+          <div className="rounded-control border border-line bg-surface-sunken px-card-x py-stack text-meta text-ink-secondary">
+            <p className="font-medium text-ink">Reviewer</p>
             <p className="mt-1">
               Recorded as{" "}
-              <span className="font-medium text-slate-900">
-                {user !== null ? (user.display_name || user.email) : "unknown"}
-              </span>
+              <span className="font-medium text-ink">{user !== null ? (user.display_name || user.email) : "unknown"}</span>
               {user !== null ? ` (${user.email})` : ""}. This identity was verified by the server
               from your signed-in session — it is not typed in here, and it cannot be edited from
               this form.
             </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {submitting ? "Recording..." : "Record decision"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" loading={submitting} disabled={!canSubmit}>
+              {submitting ? "Recording..." : "Record decision"}
+            </Button>
+            <span className="text-meta text-ink-muted">No file operation is performed.</span>
+          </div>
         </form>
+      </CardBody>
+    </Card>
+  );
+}
+
+/* --------------------------------- evidence -------------------------------- */
+
+function PolicyCard({ detail }: { detail: GovernanceDetail }) {
+  const policy = detail.applicable_policy;
+  return (
+    <Card>
+      <CardHeader
+        title="Applicable policy & version"
+        description="The single active policy that matches this asset, and the exact immutable version that applies. A missing policy never implies disposal."
+      />
+      <CardBody>
+        {policy === null ? (
+          <EmptyState
+            title="No applicable policy"
+            message="No active policy matches this asset. Missing policy coverage is an explicit gap: it never authorizes disposal, and retention review is required."
+          />
+        ) : (
+          <dl className="grid grid-cols-1 gap-stack sm:grid-cols-2">
+            <DetailField label="Policy" value={`${policy.name} (${policy.status})`} />
+            <DetailField
+              label="Version"
+              value={
+                policy.version_id !== null
+                  ? `#${policy.version_id}${
+                      policy.version_number !== null ? ` (v${policy.version_number})` : ""
+                    }`
+                  : "none"
+              }
+            />
+            <DetailField
+              label="Retention period"
+              value={
+                policy.retention_period_days !== null
+                  ? `${policy.retention_period_days} days`
+                  : "unspecified"
+              }
+            />
+            <DetailField label="Trigger" value={policy.retention_trigger ?? "unspecified"} />
+            <DetailField
+              label="Recommended action"
+              value={policy.recommended_action ?? "unspecified"}
+            />
+            <DetailField
+              label="Categories"
+              value={
+                policy.applicable_categories && policy.applicable_categories.length > 0
+                  ? policy.applicable_categories.join(", ")
+                  : "any"
+              }
+            />
+          </dl>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function AssessmentEvidenceCard({
+  detail,
+  onChanged,
+}: {
+  detail: GovernanceDetail;
+  onChanged: () => void;
+}) {
+  const { has } = useAuth();
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const assessment = detail.latest_assessment;
+
+  async function runAssessment(): Promise<void> {
+    setRunning(true);
+    setRunError(null);
+    try {
+      await assessAsset(detail.asset.id);
+      onChanged();
+    } catch (cause) {
+      setRunError(toErrorMessage(cause));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Retention assessment (system proposal)"
+        description="Each immutable entry records the policy version, findings and holds that applied. Re-running stores a new entry."
+        action={
+          has("retention:assess") ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={running}
+              onClick={() => void runAssessment()}
+            >
+              {running ? "Assessing..." : "Run assessment"}
+            </Button>
+          ) : undefined
+        }
+      />
+      <CardBody className="space-y-stack">
+        {runError ? (
+          <ErrorState
+            title="Assessment failed"
+            message={runError}
+            onRetry={() => void runAssessment()}
+          />
+        ) : null}
+
+        {assessment === null ? (
+          <EmptyState
+            title="No assessment recorded"
+            message="Run an assessment to produce the first explainable retention recommendation for this asset."
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={toneForRecommendation(assessment.recommendation)}>
+                {statusLabel(assessment.recommendation)}
+              </Badge>
+              <span className="text-meta text-ink-muted">
+                {assessment.rule_set} · assessed {formatDate(assessment.assessed_at.slice(0, 10))}
+              </span>
+            </div>
+            <p className="text-body text-ink-secondary">{assessment.rationale}</p>
+            <dl className="grid grid-cols-1 gap-stack sm:grid-cols-2">
+              <DetailField
+                label="Policy version"
+                value={
+                  assessment.policy_version_id !== null
+                    ? `#${assessment.policy_version_id}${
+                        assessment.policy_version_number !== null
+                          ? ` (v${assessment.policy_version_number})`
+                          : ""
+                      }`
+                    : "none"
+                }
+              />
+              <DetailField
+                label="Retention deadline"
+                value={
+                  assessment.retention_deadline
+                    ? formatDate(assessment.retention_deadline)
+                    : "not set"
+                }
+              />
+              <DetailField
+                label="Holds at assessment time"
+                value={String(assessment.holds_active)}
+              />
+              <DetailField label="Rule set" value={assessment.rule_set} />
+            </dl>
+            {assessment.findings.length === 0 ? (
+              <p className="text-supporting text-ink-muted">
+                No findings were recorded on this assessment; eligibility is never assumed.
+              </p>
+            ) : (
+              <ul className="divide-y divide-line rounded-control border border-line">
+                {assessment.findings.map((finding, index) => (
+                  <li key={`${finding.code}-${index}`} className="px-card-x py-stack">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={toneForSeverity(finding.severity)}>
+                        {statusLabel(finding.severity)}
+                      </Badge>
+                      <code className="font-mono text-meta text-ink-secondary">
+                        {finding.code}
+                      </code>
+                    </div>
+                    <p className="mt-1 text-supporting text-ink-secondary">{finding.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {detail.assessment_history.length > 1 ? (
+          <AssessmentHistory assessments={detail.assessment_history} />
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
+/** Immutable assessment entries are history, not editable state. */
+function AssessmentHistory({ assessments }: { assessments: Assessment[] }) {
+  return (
+    <section className="space-y-stack" aria-labelledby="assessment-history-title">
+      <h3 id="assessment-history-title" className="text-section font-semibold text-ink">
+        History ({assessments.length})
+      </h3>
+      <Table caption="Assessment history">
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Assessed</TableHeaderCell>
+            <TableHeaderCell>Recommendation</TableHeaderCell>
+            <TableHeaderCell>Rule set</TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {assessments.map((assessment, index) => (
+            <TableRow key={`${assessment.assessed_at}-${index}`}>
+              <TableCell>{formatDate(assessment.assessed_at.slice(0, 10))}</TableCell>
+              <TableCell>
+                <Badge tone={toneForRecommendation(assessment.recommendation)}>
+                  {statusLabel(assessment.recommendation)}
+                </Badge>
+              </TableCell>
+              <TableCell>{assessment.rule_set}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </section>
+  );
+}
+
+function ClassificationCard({ detail }: { detail: GovernanceDetail }) {
+  const result = detail.classification;
+  return (
+    <Card>
+      <CardHeader
+        title="Classification (system proposal)"
+        description="A deterministic, explainable proposal computed from inventoried metadata only. It is advisory and is never applied to the source record automatically."
+      />
+      <CardBody className="space-y-stack">
+        {result === null ? (
+          <EmptyState
+            title="Not classified"
+            message="No classification proposal has been recorded for this asset. An unclassified asset is an explicit unknown, never a low-risk one."
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="info">{humanize(result.outcome)}</Badge>
+              <Badge tone={toneForConfidence(result.confidence)}>
+                confidence {result.confidence}
+              </Badge>
+              <span className="text-meta text-ink-muted">
+                {result.rule_version} · {formatDate(result.classified_at.slice(0, 10))}
+              </span>
+            </div>
+            <dl className="grid grid-cols-1 gap-stack sm:grid-cols-2">
+              <DetailField
+                label="Proposed category"
+                value={result.proposed_category ?? "unclassified"}
+              />
+              <DetailField
+                label="Proposed sensitivity"
+                value={humanize(result.proposed_sensitivity)}
+              />
+            </dl>
+            <p className="text-body text-ink-secondary">{result.confidence_meaning}</p>
+            {result.warnings.length > 0 ? (
+              <Notice tone="warning" title={`${result.warnings.length} warning${
+                result.warnings.length === 1 ? "" : "s"
+              } recorded`} />
+            ) : null}
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function QualityCard({ detail }: { detail: GovernanceDetail }) {
+  const findings = detail.quality_findings;
+  return (
+    <Card>
+      <CardHeader
+        title="Data quality & remediation"
+        description="Deterministic metadata checks with suggested remediation. A finding describes metadata, never a file."
+      />
+      <CardBody>
+        {findings.length === 0 ? (
+          <EmptyState
+            title="No quality findings"
+            message="Every documented check passed for this asset. That does not prove the metadata is complete or correct."
+          />
+        ) : (
+          <QualityList findings={findings} />
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function QualityList({ findings }: { findings: QualityFinding[] }) {
+  return (
+    <ul className="divide-y divide-line rounded-control border border-line">
+      {findings.map((finding, index) => (
+        <li key={`${finding.check}-${index}`} className="px-card-x py-stack">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
+            <code className="font-mono text-meta text-ink-secondary">{finding.check}</code>
+          </div>
+          <p className="mt-1 text-supporting text-ink-secondary">{finding.message}</p>
+          <p className="mt-1 text-meta text-ink-muted">Remediation: {finding.remediation}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SourceCard({ detail }: { detail: GovernanceDetail }) {
+  const { source } = detail;
+  return (
+    <Card>
+      <CardHeader
+        title="Source & discovery"
+        description="Where the record came from and when it was last observed. Scan results describe discovery, not a file operation."
+      />
+      <CardBody className="space-y-stack">
+        <dl className="grid grid-cols-1 gap-stack sm:grid-cols-2">
+          <DetailField label="Data source" value={source.data_source_name ?? "unavailable"} />
+          <DetailField label="Source type" value={source.source_type ?? "unknown"} />
+          <DetailField label="Connector" value={source.connector_type ?? "unavailable"} />
+        </dl>
+
+        {source.notes.length > 0 ? (
+          <Notice tone="warning" title="Source notes">
+            <ul className="list-disc space-y-1 pl-card-x">
+              {source.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </Notice>
+        ) : null}
+
+        {source.mappings.length > 0 ? (
+          <div>
+            <p className="text-supporting font-medium text-ink">
+              Source-record mappings ({source.mappings.length})
+            </p>
+            <ul className="mt-1 divide-y divide-line rounded-control border border-line">
+              {source.mappings.map((mapping) => (
+                <li key={mapping.mapping_id} className="px-card-x py-stack">
+                  <code className="font-mono text-meta text-ink-secondary">
+                    {mapping.source_key}
+                  </code>
+                  <p className="mt-0.5 text-meta text-ink-muted">
+                    observed {mapping.observation_count}× · last seen{" "}
+                    {mapping.last_seen_at
+                      ? formatDate(mapping.last_seen_at.slice(0, 10))
+                      : "unknown"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {source.latest_scan ? (
+          <div className="rounded-control border border-line bg-surface-sunken px-card-x py-stack text-meta text-ink-secondary">
+            <span className="font-medium text-ink">
+              Latest scan #{source.latest_scan.scan_job_id}
+            </span>{" "}
+            · status {source.latest_scan.status} · discovered {source.latest_scan.total_discovered} ·
+            imported {source.latest_scan.total_imported} · skipped {source.latest_scan.total_skipped}
+          </div>
+        ) : (
+          <p className="text-supporting text-ink-muted">
+            No discovery run is recorded for this source; the asset may have been created directly.
+          </p>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function InventoryCard({ detail }: { detail: GovernanceDetail }) {
+  const { asset } = detail;
+  return (
+    <Card>
+      <CardHeader
+        title="Inventory metadata (observed)"
+        description="Values as recorded from the source. Missing metadata is shown as unknown and never treated as low risk."
+      />
+      <CardBody className="space-y-stack">
+        <div>
+          <p className="text-section font-semibold text-ink">{asset.title}</p>
+          {asset.description ? (
+            <p className="mt-1 text-supporting text-ink-secondary">{asset.description}</p>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-1 gap-stack sm:grid-cols-2">
+          <DetailField label="External id" value={asset.external_id} />
+          <DetailField label="Record type" value={asset.record_type} />
+          <DetailField label="Category" value={asset.category ?? "unknown"} />
+          <DetailField label="Sensitivity" value={humanize(asset.sensitivity)} />
+          <DetailField
+            label="Contains personal data"
+            value={asset.contains_personal_data ? "Yes" : "No"}
+          />
+          <DetailField label="Lifecycle status" value={humanize(asset.lifecycle_status)} />
+          <DetailField label="File name" value={asset.file_name ?? "unknown"} />
+          <DetailField label="MIME type" value={asset.mime_type ?? "unknown"} />
+          <DetailField
+            label="Size"
+            value={asset.size_bytes > 0 ? formatBytes(asset.size_bytes) : "unknown"}
+          />
+          <DetailField label="Owner team" value={asset.owner_team ?? "unassigned"} />
+          <DetailField
+            label="Checksum"
+            value={asset.checksum_sha256 ? `${asset.checksum_sha256.slice(0, 16)}…` : "unknown"}
+          />
+          <DetailField
+            label="Last reviewed"
+            value={asset.last_reviewed ? formatDate(asset.last_reviewed) : "never"}
+          />
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+function HoldsCard({ detail }: { detail: GovernanceDetail }) {
+  const holds: Hold[] = detail.active_holds;
+  return (
+    <Card>
+      <CardHeader
+        title="Active holds"
+        description="A hold overrides incompatible lifecycle recommendations. Releasing a hold never rewrites history."
+      />
+      <CardBody>
+        {holds.length === 0 ? (
+          <p className="text-supporting text-ink-muted">No active holds block this asset.</p>
+        ) : (
+          <ul className="divide-y divide-line rounded-control border border-line">
+            {holds.map((hold) => (
+              <li key={hold.id} className="px-card-x py-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={toneForHoldStatus(hold.status)}>{hold.status}</Badge>
+                  <span className="font-medium text-ink">{hold.name}</span>
+                </div>
+                <p className="mt-1 text-meta text-ink-muted">
+                  {hold.hold_type ?? "hold"}
+                  {hold.legal_basis ? ` · ${hold.legal_basis}` : ""}
+                  {hold.asset_id === null ? " · institution-wide" : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/* ----------------------------- decision history --------------------------- */
+
+function DecisionHistoryCard({
+  decisions,
+  effectiveDecisionId,
+}: {
+  decisions: Decision[];
+  effectiveDecisionId: number | null;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title={`Review decisions (${decisions.length})`}
+        description="Append-only history. A decision is never edited or erased: a superseded decision stays visible and points at the correction that replaced it. The effective decision is the newest one that has not been superseded."
+      />
+      <CardBody className="p-0">
+        {decisions.length === 0 ? (
+          <div className="px-card-x py-card-y">
+            <p className="text-supporting text-ink-muted">
+              No human decision has been recorded yet.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-line">
+            {decisions.map((decision) => (
+              <li key={decision.id} className="px-card-x py-card-y">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={toneForDecision(decision.decision)}>
+                    {statusLabel(decision.decision)}
+                  </Badge>
+                  {decision.id === effectiveDecisionId ? (
+                    <Badge tone="success">Effective</Badge>
+                  ) : null}
+                  {decision.is_superseded ? <Badge tone="warning">Superseded</Badge> : null}
+                  <span className="text-meta text-ink-muted">
+                    reviewer {decision.reviewer} · {formatDate(decision.decided_at.slice(0, 10))} ·
+                    assessment #{decision.assessment_id}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-body text-ink-secondary">{decision.reason}</p>
+                <p className="mt-1 text-meta text-ink-muted">
+                  Reviewed recommendation: {statusLabel(decision.recommendation_reviewed)}
+                  {decision.policy_version_id !== null
+                    ? ` · policy version #${decision.policy_version_id}`
+                    : ""}
+                </p>
+                {decision.supersedes_decision_id !== null ? (
+                  <p className="mt-1 text-meta text-accent-ink">
+                    Corrects decision #{decision.supersedes_decision_id}; the earlier decision stays
+                    in this history.
+                  </p>
+                ) : null}
+                {decision.superseded_by_decision_id !== null ? (
+                  <p className="mt-1 text-meta text-warning-ink">
+                    Superseded by decision #{decision.superseded_by_decision_id}.
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/* -------------------------------- provenance ------------------------------ */
+
+function ProvenanceCard({ provenance }: { provenance: GovernanceProvenance }) {
+  return (
+    <Card>
+      <CardHeader
+        title="Provenance & limitations"
+        description="Each value on this screen is labelled by where it came from. Nothing here acts on a file."
+      />
+      <CardBody className="space-y-stack">
+        <dl className="grid grid-cols-1 gap-stack text-supporting sm:grid-cols-2 xl:grid-cols-4">
+          <DetailField
+            label="Observed source metadata"
+            value={provenance.observed.join(", ") || "—"}
+          />
+          <DetailField
+            label="System proposals"
+            value={provenance.system_proposed.join(", ") || "none recorded"}
+          />
+          <DetailField
+            label="Assessments"
+            value={provenance.assessed.join(", ") || "none recorded"}
+          />
+          <DetailField
+            label="Human decisions"
+            value={provenance.human_decisions.join(", ") || "none recorded"}
+          />
+        </dl>
+        <p className="rounded-control border border-line bg-surface-sunken px-card-x py-stack text-supporting text-ink-secondary">
+          File operations: {provenance.file_operations}
+        </p>
       </CardBody>
     </Card>
   );

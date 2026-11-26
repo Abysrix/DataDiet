@@ -22,8 +22,8 @@ export function BarList({ items, unit = "" }: { items: BarItem[]; unit?: string 
         return (
           <li key={item.label}>
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-body text-ink-muted">{item.label}</span>
-              <span className="text-data font-medium text-ink tabular-nums">
+              <span className="min-w-0 text-body text-ink-secondary">{item.label}</span>
+              <span className="shrink-0 text-data font-medium text-ink tabular-nums">
                 {item.value}
                 {unit}
               </span>

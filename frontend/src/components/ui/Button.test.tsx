@@ -103,6 +103,13 @@ describe("Button", () => {
     expect(className).toContain("mt-4");
     expect(className).toContain("bg-transparent");
   });
+
+  it("carries its own visible focus ring, not just the page-level safety net", () => {
+    render(<Button>Focused</Button>);
+    expect(screen.getByRole("button", { name: "Focused" }).className).toContain(
+      "focus-visible:outline-focus",
+    );
+  });
 });
 
 describe("IconButton", () => {
@@ -130,6 +137,17 @@ describe("IconButton", () => {
 
     expect(screen.getByRole("button", { name: "small" }).className).toContain("h-8 w-8");
     expect(screen.getByRole("button", { name: "medium" }).className).toContain("h-9 w-9");
+  });
+
+  it("keeps its square hit area focusable with a visible ring", () => {
+    render(
+      <IconButton aria-label="Refresh inventory">
+        <svg />
+      </IconButton>,
+    );
+    expect(screen.getByRole("button", { name: "Refresh inventory" }).className).toContain(
+      "focus-visible:outline-focus",
+    );
   });
 
   it("does not fire while disabled", () => {

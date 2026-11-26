@@ -800,6 +800,21 @@ describe("who is allowed to act", () => {
     expect(screen.getAllByRole("button", { name: "Details" })).toHaveLength(3);
   });
 
+  it("states the permission boundary as read-only information", async () => {
+    render(
+      withAuth(
+        <MemoryRouter>
+          <Holds />
+        </MemoryRouter>,
+        testUser({ role: "viewer" }),
+      ),
+    );
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/read-only access/i);
+    expect(note).toHaveTextContent(/retention:write/i);
+    expect(screen.queryByRole("button", { name: "Create hold" })).not.toBeInTheDocument();
+  });
+
   it("still reads the list for a role that can only read", async () => {
     render(
       withAuth(

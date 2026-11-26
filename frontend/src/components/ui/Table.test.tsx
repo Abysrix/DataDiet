@@ -71,6 +71,15 @@ describe("Table", () => {
     expect(score).not.toHaveAttribute("align");
   });
 
+  it("uses compact uppercase headers and tabular numerals for data", () => {
+    render(<InventoryTable />);
+
+    expect(screen.getByRole("columnheader", { name: "Risk score" }).className).toContain(
+      "uppercase",
+    );
+    expect(screen.getByText("91").className).toContain("tabular-nums");
+  });
+
   it("carries the semantic badge through a cell unchanged", () => {
     render(<InventoryTable />);
     const badge = screen.getByText("restricted");

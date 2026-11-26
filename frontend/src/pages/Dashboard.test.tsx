@@ -104,6 +104,27 @@ describe("Dashboard", () => {
     });
   });
 
+  it("ranks the next destinations and only offers areas the account can read", async () => {
+    await renderDashboard();
+
+    const review = screen.getByRole("link", { name: /review queue/i });
+    expect(review).toHaveAttribute("href", "/recommendations");
+    expect(screen.getByRole("link", { name: /inspect inventory/i })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
+  });
+
+  it("omits a destination the account cannot open", async () => {
+    await renderDashboard(mockSummary(), testUser({ permissions: ["inventory:read"] }));
+
+    expect(screen.queryByRole("link", { name: /review queue/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /inspect inventory/i })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
+  });
+
   it("shows an error state with retry when the API is unreachable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("connection refused"));
 
@@ -202,10 +223,9 @@ describe("Dashboard", () => {
       "href",
       "/recommendations",
     );
-    expect(within(card).getByRole("link", { name: /open retrieval requests/i })).toHaveAttribute(
-      "href",
-      "/retrieval",
-    );
+    expect(
+      within(card).getByRole("link", { name: /retrieval requests \(not implemented\)/i }),
+    ).toHaveAttribute("href", "/retrieval");
   });
 
   it("still reports an outstanding count it cannot link for this account", async () => {
@@ -216,7 +236,9 @@ describe("Dashboard", () => {
     expect(within(card).getByRole("link", { name: /duplicate candidates/i })).toBeInTheDocument();
     expect(within(card).queryByRole("link", { name: /marked for review/i })).toBeNull();
     expect(within(card).getByText("Marked for review")).toBeInTheDocument();
-    expect(within(card).queryByRole("link", { name: /open retrieval requests/i })).toBeNull();
+    expect(
+      within(card).queryByRole("link", { name: /retrieval requests \(not implemented\)/i }),
+    ).toBeNull();
     expect(within(card).getByText("5")).toBeInTheDocument();
   });
 
@@ -232,7 +254,7 @@ describe("Dashboard", () => {
     const card = cardByTitle(/attention required/i);
     expect(within(card).queryByText("Duplicate candidates")).toBeNull();
     expect(within(card).queryByText("Marked eligible for disposal")).toBeNull();
-    expect(within(card).queryByText("Open retrieval requests")).toBeNull();
+    expect(within(card).queryByText("Retrieval requests (not implemented)")).toBeNull();
     expect(within(card).getByText("Marked for review")).toBeInTheDocument();
   });
 
@@ -257,7 +279,7 @@ describe("Dashboard", () => {
 
     const actions = cardByTitle(/recommended action mix/i);
     expect(within(actions).getByText("Eligible for disposal")).toBeInTheDocument();
-    expect(actions).toHaveTextContent(/no retention engine runs yet/i);
+    expect(actions).toHaveTextContent(/advisory recommendations only/i);
   });
 
   it("marks activity dates as machine-readable times", async () => {

@@ -404,6 +404,19 @@ describe("what the queue asks the server for", () => {
     expect(listRecommendations).toHaveBeenCalledTimes(2);
   });
 
+  it("re-reads the queue when the header refresh action is used", async () => {
+    renderQueue(<Recommendations />);
+    await screen.findByText("Payroll export");
+    const before = listRecommendations.mock.calls.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
+
+    await waitFor(() => {
+      expect(listRecommendations.mock.calls.length).toBeGreaterThan(before);
+    });
+    expect(screen.getByText("Payroll export")).toBeInTheDocument();
+  });
+
   it("never asks for an unscoped queue with a tenant account", async () => {
     listRecommendations.mockResolvedValue(
       queue([item({ asset_title: "Board minutes", institution_id: 2 })]),
@@ -565,6 +578,8 @@ describe("the rows are the server's records", () => {
     expect(within(row).queryByRole("button", { name: "Record decision" })).toBeNull();
     // Reading is still allowed: the evidence view is not a decision control.
     expect(within(row).getByRole("button", { name: "Review evidence" })).toBeEnabled();
+    expect(screen.getByRole("note")).toHaveTextContent("Read-only access");
+    expect(screen.getByRole("note")).toHaveTextContent("review:decide");
   });
 
   it("links the row to the governance view that holds the history", async () => {

@@ -7,9 +7,21 @@ import type { AriaAttributes } from "react";
  * metrics it does not have to re-declare.
  */
 
+/**
+ * Explicit focus for light and dark surfaces. The base `:focus-visible` rule in
+ * `index.css` is a safety net for controls that forget it; these are what the
+ * primitives actually use, and the inverse variant keeps the ring visible on
+ * the shell's dark rail.
+ */
+export const FOCUS_RING =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+
+export const FOCUS_RING_INVERSE =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-inverse";
+
 export const CONTROL_BASE =
   "w-full rounded-control border bg-surface px-control-x py-control-y text-body text-ink " +
-  "placeholder:text-ink-subtle transition-colors";
+  `placeholder:text-ink-subtle transition-colors ${FOCUS_RING}`;
 
 export const CONTROL_RESTING = "border-line-strong";
 

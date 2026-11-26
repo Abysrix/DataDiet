@@ -68,12 +68,12 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`relative w-full rounded-overlay border border-line bg-surface shadow-overlay animate-overlay-in ${
+        className={`relative max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-overlay border border-line bg-surface shadow-overlay animate-overlay-in ${
           WIDTHS[width]
         }`}
       >
         <header className="flex items-start justify-between gap-3 border-b border-line px-card-x py-card-y">
-          <h2 id={titleId} className="text-section font-semibold text-ink">
+          <h2 id={titleId} className="text-body font-semibold text-ink">
             {title}
           </h2>
           <IconButton aria-label="Close" size="sm" onClick={onClose}>

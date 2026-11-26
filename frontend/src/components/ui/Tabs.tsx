@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { FOCUS_RING } from "./control";
 
 export interface TabItem {
   id: string;
@@ -92,7 +93,7 @@ export function Tabs({
         role="tablist"
         aria-label={ariaLabel}
         onKeyDown={handleKeyDown}
-        className="flex gap-1 border-b border-line"
+        className="flex gap-1 overflow-x-auto border-b border-line"
       >
         {items.map((item) => {
           const selected = item.id === current;
@@ -104,14 +105,14 @@ export function Tabs({
               data-tab-id={item.id}
               id={`${uid}-tab-${item.id}`}
               aria-selected={selected}
-              aria-controls={`${uid}-panel-${item.id}`}
+              aria-controls={selected ? `${uid}-panel-${item.id}` : undefined}
               tabIndex={selected ? 0 : -1}
               disabled={item.disabled}
               onClick={() => select(item.id)}
-              className={`-mb-px border-b-2 px-control-x py-control-y text-body font-medium transition-colors ${
+              className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-control-x py-control-y text-body font-medium transition-colors ${FOCUS_RING} ${
                 selected
                   ? "border-accent text-ink"
-                  : "border-transparent text-ink-muted hover:text-ink"
+                  : "border-transparent text-ink-muted hover:border-line-strong hover:text-ink"
               } disabled:cursor-not-allowed disabled:text-ink-disabled`}
             >
               {item.label}

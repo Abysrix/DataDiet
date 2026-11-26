@@ -119,6 +119,13 @@ describe("Input and Textarea states", () => {
     expect(screen.getByRole("textbox").className).toContain("border-line-strong");
   });
 
+  it("gives every text control its own focus ring", () => {
+    render(<Input aria-label="Keyword" />);
+    expect(screen.getByRole("textbox", { name: "Keyword" }).className).toContain(
+      "focus-visible:outline-focus",
+    );
+  });
+
   it("grows a textarea but never horizontally", () => {
     render(<Textarea />);
     const control = screen.getByRole("textbox");

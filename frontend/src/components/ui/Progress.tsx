@@ -54,7 +54,7 @@ export function Progress({
         <div
           aria-hidden="true"
           className={`h-full rounded-pill ${TONE_SOLID[role]} ${
-            clamped === null ? "w-1/3 animate-progress-sweep" : ""
+            clamped === null ? "w-1/3 animate-progress-sweep motion-reduce:animate-none" : ""
           }`}
           style={clamped === null ? undefined : { width: `${percent}%` }}
         />

@@ -43,6 +43,11 @@ describe("Badge tones", () => {
     expect(classesOf("Draft")).toEqual(expect.arrayContaining(tokenClasses("neutral")));
   });
 
+  it("keeps a status label on one line", () => {
+    render(<Badge tone="warning">Needs review</Badge>);
+    expect(classesOf("Needs review")).toContain("whitespace-nowrap");
+  });
+
   it.each(LEGACY_TONES)("maps the legacy tone %s onto the %s role", (legacy, role) => {
     render(<Badge tone={legacy}>{legacy}</Badge>);
 

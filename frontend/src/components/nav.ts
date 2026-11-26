@@ -104,7 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/archive",
     label: "Archive",
-    description: "Manifests and integrity checks",
+    description: "Not implemented — archive prerequisites",
     Icon: IconArchive,
     permission: "sources:read",
     group: "archive",
@@ -112,7 +112,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/retrieval",
     label: "Retrieval Requests",
-    description: "Authorized restore workflows",
+    description: "Not implemented — no restore workflow",
     Icon: IconRetrieval,
     permission: "sources:read",
     group: "archive",
@@ -120,7 +120,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/reports",
     label: "Reports",
-    description: "Audit logs and exports",
+    description: "Evidence views — no exports",
     Icon: IconReports,
     permission: "governance:read",
     group: "archive",
@@ -128,7 +128,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/users",
     label: "User Management",
-    description: "Roles and approvals directory",
+    description: "Current session profile only",
     Icon: IconUsers,
     permission: "users:manage",
     group: "administer",

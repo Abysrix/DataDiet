@@ -1,13 +1,20 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchRiskAnalysis } from "../api/demo";
 import type { RiskBand, RiskRecordView, RiskRuleInfo } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { DemoNotice } from "../components/ui/DemoNotice";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
+import { Field } from "../components/ui/Field";
+import { Select } from "../components/ui/Select";
+import { Spinner } from "../components/ui/Spinner";
+import { FOCUS_RING } from "../components/ui/control";
 import { TONE_SOLID } from "../components/ui/statusClasses";
 import {
   Table,
@@ -17,7 +24,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "../components/ui/Table";
-import { IconChevronRight } from "../components/icons";
+import { IconChevronRight, IconShield } from "../components/icons";
 import { humanize } from "../lib/format";
 import { toneForRiskBand, toneForSensitivity, type Tone } from "../lib/semantic";
 
@@ -38,6 +45,8 @@ const BANDS: Array<{ band: RiskBand; label: string; range: string }> = [
 
 const MAX_SCORE = 100;
 const ELEVATED_BANDS: RiskBand[] = ["critical", "high"];
+
+const LINK_CLASS = `inline-flex items-center gap-1 rounded-control font-medium text-accent-ink transition-colors hover:text-accent hover:underline ${FOCUS_RING}`;
 
 function shareOf(value: number, total: number): string {
   return total > 0 ? `${Math.round((value / total) * 100)}%` : "—";
@@ -102,15 +111,109 @@ function dominantIndicator(record: RiskRecordView): RiskRecordView["indicators"]
   );
 }
 
+function RiskHeader() {
+  return (
+    <PageHeader
+      title="Risk Analysis"
+      description="Privacy and retention exposure for the synthetic sample set, scored by the documented indicator rules and explained indicator by indicator. These are exposure indicators, not a security rating, and they drive no automated decision."
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="info">Synthetic sample</Badge>
+          <Badge tone="neutral">Advisory only</Badge>
+        </div>
+      }
+    />
+  );
+}
+
+/**
+ * The endpoint requires `inventory:read`. A client-side gate is usability only —
+ * the backend re-checks every request — but it keeps a known refusal from being
+ * presented as a retryable data error when no request was ever made.
+ */
 export default function RiskAnalysis() {
+  const { status, has } = useAuth();
+
+  if (status === "loading") {
+    return (
+      <div>
+        <RiskHeader />
+        <Card>
+          <CardHeader
+            title="Risk access"
+            description="Checking the permissions the server verified for this session."
+          />
+          <CardBody>
+            <Spinner label="Verifying your session…" />
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
+  if (status === "anonymous") {
+    return (
+      <div>
+        <RiskHeader />
+        <Card>
+          <CardHeader
+            title="Risk access"
+            description="This screen needs a verified DataDiet session."
+          />
+          <CardBody>
+            <EmptyState
+              title="Sign in to view risk analysis"
+              message="No identity has been verified for this browser, so no risk request was made."
+              action={
+                <Link to="/signin" className={LINK_CLASS}>
+                  Go to sign in
+                  <IconChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              }
+            />
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!has("inventory:read")) {
+    return (
+      <div>
+        <RiskHeader />
+        <Card>
+          <CardHeader
+            title="Risk data is not available to this account"
+            description="The server-verified permissions for this session do not include inventory:read."
+            action={<Badge tone="neutral">Permission required</Badge>}
+          />
+          <CardBody className="space-y-gutter">
+            <div className="flex items-start gap-3 rounded-card border border-line bg-surface-sunken px-card-x py-card-y">
+              <IconShield className="h-5 w-5 shrink-0 text-ink-secondary" />
+              <p className="text-supporting text-ink-secondary">
+                The backend would refuse this request, so no request was made. This is shown as
+                information, not as a disabled button or a retryable error.
+              </p>
+            </div>
+            <p className="text-meta text-ink-muted">
+              If this is unexpected, the account&apos;s directory permissions need to be reviewed
+              outside this demo. This page never grants or changes permissions.
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
+  return <RiskAnalysisResults />;
+}
+
+function RiskAnalysisResults() {
   const { data, loading, error, refetch } = useApiQuery(fetchRiskAnalysis, []);
 
   return (
     <div>
-      <PageHeader
-        title="Risk Analysis"
-        description="Privacy and retention exposure for the synthetic sample set, scored by the documented indicator rules and explained indicator by indicator. These are exposure indicators, not a security rating, and they drive no automated decision."
-      />
+      <RiskHeader />
 
       {loading ? <LoadingRisk /> : null}
       {error ? (
@@ -120,7 +223,11 @@ export default function RiskAnalysis() {
       {data ? (
         <>
           <DemoNotice notice={data.meta.notice} />
-          <RiskContent ruleSet={data.data.rule_set} rules={data.data.rules} records={data.data.records} />
+          <RiskContent
+            ruleSet={data.data.rule_set}
+            rules={data.data.rules}
+            records={data.data.records}
+          />
         </>
       ) : null}
     </div>
@@ -129,8 +236,9 @@ export default function RiskAnalysis() {
 
 /**
  * The first-load state: the shape of the exposure panel with its figures
- * withheld. `role="status"` carries the announcement, so the bars are hidden
- * from assistive tech rather than read out as an unnamed region.
+ * withheld. It is deliberately static — no shimmer to imply progress — and
+ * `role="status"` carries the announcement, so the bars are hidden from
+ * assistive tech rather than read out as an unnamed region.
  */
 function LoadingRisk() {
   return (
@@ -147,18 +255,18 @@ function LoadingRisk() {
           <div className="grid grid-cols-1 gap-gutter sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((item) => (
               <div key={item} className="space-y-2">
-                <div className="h-2.5 w-1/3 animate-pulse rounded-pill bg-surface-sunken" />
-                <div className="h-6 w-1/2 animate-pulse rounded-pill bg-surface-sunken" />
+                <div className="h-2.5 w-1/3 rounded-pill bg-surface-sunken" />
+                <div className="h-6 w-1/2 rounded-pill bg-surface-sunken" />
               </div>
             ))}
           </div>
-          <div className="h-2.5 w-full animate-pulse rounded-pill bg-surface-sunken" />
+          <div className="h-2.5 w-full rounded-pill bg-surface-sunken" />
           <div className="space-y-3">
             {[0, 1, 2, 3].map((row) => (
               <div key={row} className="flex items-center gap-4">
-                <div className="h-3 w-1/4 animate-pulse rounded-pill bg-surface-sunken" />
-                <div className="h-3 flex-1 animate-pulse rounded-pill bg-surface-sunken" />
-                <div className="h-3 w-16 animate-pulse rounded-pill bg-surface-sunken" />
+                <div className="h-3 w-1/4 rounded-pill bg-surface-sunken" />
+                <div className="h-3 flex-1 rounded-pill bg-surface-sunken" />
+                <div className="h-3 w-16 rounded-pill bg-surface-sunken" />
               </div>
             ))}
           </div>
@@ -194,7 +302,7 @@ function RiskContent({
           <CardBody>
             <EmptyState
               title="No assessments in this sample set"
-              message="The risk endpoint returned no records, so there is nothing to distribute, rank or explain. Assessments appear only when records are inventoried; scanning is not implemented."
+              message="The risk endpoint returned no records, so there is nothing to distribute, rank or explain. Assessments appear only when records are inventoried by a source scan."
             />
           </CardBody>
         </Card>
@@ -215,8 +323,13 @@ function RiskContent({
       />
 
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
-        <SeverityDistribution bands={bandCounts} total={records.length} className="xl:col-span-3" />
-        <WhereToStart records={records} className="xl:col-span-2" />
+        <SeverityDistribution
+          bands={bandCounts}
+          total={records.length}
+          ruleSet={ruleSet}
+          className="xl:col-span-3"
+        />
+        <WhereToStart records={records} ruleSet={ruleSet} className="xl:col-span-2" />
       </div>
 
       <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
@@ -229,7 +342,7 @@ function RiskContent({
         <RuleCatalogue rules={rules} ruleSet={ruleSet} className="xl:col-span-2" />
       </div>
 
-      <AssessedRecords records={records} />
+      <AssessedRecords records={records} ruleSet={ruleSet} />
     </div>
   );
 }
@@ -263,14 +376,27 @@ function ExposureSummary({
         } this endpoint returned — the payload supplies no aggregates of its own.`}
       />
       <CardBody className="space-y-3">
-        <dl className="flex flex-wrap gap-x-6 gap-y-2">
-          <SummaryItem label="Records assessed" value={String(assessed)} />
+        <dl className="grid grid-cols-1 gap-gutter sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryItem
+            label="Records assessed"
+            value={String(assessed)}
+            source="Counted from the returned records"
+          />
           <SummaryItem
             label="High or Critical"
             value={`${elevated} (${shareOf(elevated, assessed)})`}
+            source="Counted from band fields by the documented rule set"
           />
-          <SummaryItem label="Highest score" value={`${topScore}/${MAX_SCORE}`} />
-          <SummaryItem label="Indicator points contributed" value={String(totalPoints)} />
+          <SummaryItem
+            label="Highest score"
+            value={`${topScore}/${MAX_SCORE}`}
+            source={`Rule-set score, capped at ${MAX_SCORE}`}
+          />
+          <SummaryItem
+            label="Indicator points contributed"
+            value={String(totalPoints)}
+            source="Sum of the returned indicator points"
+          />
         </dl>
 
         {leading ? (
@@ -283,17 +409,16 @@ function ExposureSummary({
         ) : null}
 
         <p className="text-meta text-ink-subtle">
-          Rule set <span className="font-mono">{ruleSet}</span>. This endpoint is not
-          institution-scoped: the same synthetic sample set is returned for every institution
-          scope, and changing the scope in the sidebar does not change these numbers.
+          Rule set <span className="font-mono">{ruleSet}</span>: score bands and the 100-point cap
+          come from that rule set; counts and shares above are derived only from the returned
+          records. This endpoint is not institution-scoped: the same synthetic sample set is
+          returned for every institution scope, and changing the scope in the sidebar does not
+          change these numbers.
         </p>
         <p className="text-meta text-ink-subtle">
           These records are in-process fixtures, not rows in the inventory database, so no record
           here opens an asset page.{" "}
-          <Link
-            to="/inventory"
-            className="inline-flex items-center gap-1 rounded-control font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
-          >
+          <Link to="/inventory" className={LINK_CLASS}>
             Open the inventory view
             <IconChevronRight className="h-3.5 w-3.5" />
             <span className="sr-only">for the assets stored in the inventory database</span>
@@ -305,13 +430,24 @@ function ExposureSummary({
   );
 }
 
-function SummaryItem({ label, value }: { label: string; value: string }) {
+function SummaryItem({
+  label,
+  value,
+  source,
+}: {
+  label: string;
+  value: string;
+  source: string;
+}) {
   return (
     <div className="min-w-0">
       <dt className="text-eyebrow font-semibold uppercase tracking-[0.06em] text-ink-muted">
         {label}
       </dt>
-      <dd className="text-data font-semibold tabular-nums text-ink">{value}</dd>
+      <dd>
+        <span className="block text-data font-semibold tabular-nums text-ink">{value}</span>
+        <span className="mt-0.5 block text-meta text-ink-subtle">{source}</span>
+      </dd>
     </div>
   );
 }
@@ -319,10 +455,12 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 function SeverityDistribution({
   bands,
   total,
+  ruleSet,
   className,
 }: {
   bands: BandCount[];
   total: number;
+  ruleSet: string;
   className?: string;
 }) {
   const present = bands.filter((band) => band.count > 0);
@@ -333,7 +471,7 @@ function SeverityDistribution({
         title="Severity distribution"
         description={`Records per band, as a share of the ${total} assessed record${
           total === 1 ? "" : "s"
-        }.`}
+        }. Bands and score ranges come from rule set ${ruleSet}.`}
       />
       <CardBody className="space-y-4">
         {present.length > 0 ? (
@@ -404,7 +542,15 @@ function SeverityDistribution({
  * assessments are computed over in-process fixtures that are not rows in the
  * inventory database, so a link to an asset page would lead nowhere.
  */
-function WhereToStart({ records, className }: { records: RiskRecordView[]; className?: string }) {
+function WhereToStart({
+  records,
+  ruleSet,
+  className,
+}: {
+  records: RiskRecordView[];
+  ruleSet: string;
+  className?: string;
+}) {
   const elevated = records.filter((record) => ELEVATED_BANDS.includes(record.band));
 
   return (
@@ -415,8 +561,8 @@ function WhereToStart({ records, className }: { records: RiskRecordView[]; class
           elevated.length > 0
             ? `The ${elevated.length} record${
                 elevated.length === 1 ? "" : "s"
-              } in a High or Critical band, in the order the endpoint returns them.`
-            : "No record in this sample set sits in a High or Critical band."
+              } in a High or Critical band, in the order the endpoint returns them. Scores and bands are rule-set results from ${ruleSet}.`
+            : `No record in this sample set sits in a High or Critical band. Bands are defined by rule set ${ruleSet}.`
         }
       />
       <CardBody className="p-0">
@@ -426,7 +572,8 @@ function WhereToStart({ records, className }: { records: RiskRecordView[]; class
             <span className="font-medium text-ink tabular-nums">
               {records.reduce((highest, record) => Math.max(highest, record.score), 0)}/{MAX_SCORE}
             </span>
-            . Expand the assessed records below to see what each score is made of.
+            , a rule-set result. Expand the assessed records below to see what each score is made
+            of.
           </p>
         ) : (
           <ol className="divide-y divide-line">
@@ -442,6 +589,10 @@ function WhereToStart({ records, className }: { records: RiskRecordView[]; class
                     <Badge tone={toneForRiskBand(record.band)}>{humanize(record.band)}</Badge>
                   </div>
                   <p className="mt-1 font-mono text-meta text-ink-muted">{record.record_id}</p>
+                  <p className="mt-1 text-meta text-ink-subtle">
+                    Score and band from rule set <span className="font-mono">{ruleSet}</span>;
+                    score capped at {MAX_SCORE}.
+                  </p>
                   {driver ? (
                     <p className="mt-1 text-meta text-ink-secondary">
                       Largest contributor: {driver.label} (+{driver.points})
@@ -478,7 +629,7 @@ function CategoryBreakdown({
         title="Risk categories by contribution"
         description={`Which documented indicators actually drive this sample set, counted over the same ${
           total === 1 ? "record" : `${total} records`
-        }.`}
+        }. Points are the catalogue's indicator weights, not a new score.`}
       />
       <CardBody>
         <Table caption="Indicator contribution: records affected and points contributed">
@@ -565,6 +716,7 @@ function RuleCatalogue({
                 <p className="mt-1 flex flex-wrap items-baseline gap-x-3">
                   <span className="font-mono text-meta text-ink-subtle">{rule.code}</span>
                   <span className="text-data font-semibold tabular-nums text-ink">{rule.points}</span>
+                  <span className="text-meta text-ink-muted">documented points</span>
                 </p>
               </li>
             ))}
@@ -579,30 +731,92 @@ function RuleCatalogue({
   );
 }
 
-function AssessedRecords({ records }: { records: RiskRecordView[] }) {
+function AssessedRecords({
+  records,
+  ruleSet,
+}: {
+  records: RiskRecordView[];
+  ruleSet: string;
+}) {
+  const [bandFilter, setBandFilter] = useState<RiskBand | "all">("all");
+  const visible =
+    bandFilter === "all" ? records : records.filter((record) => record.band === bandFilter);
+  const counts = countByBand(records);
+
   return (
     <Card>
       <CardHeader
         title="Assessed records"
-        description="Every record the endpoint returned, in its own order. Expand a record for the indicators behind its score."
+        description="Every record the endpoint returned, in its own order. Scores and bands are rule-set results; expand a record for the indicators behind its score."
         action={
           <span className="text-meta tabular-nums text-ink-muted">
             {records.length} record{records.length === 1 ? "" : "s"}
           </span>
         }
       />
-      <CardBody className="p-0">
-        <ul className="divide-y divide-line">
-          {records.map((record) => (
-            <RiskRow key={record.record_id} record={record} />
-          ))}
-        </ul>
+      <CardBody className="space-y-gutter">
+        <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
+          <Field
+            label="Filter assessed records by band"
+            hint="Filtering changes only which returned rows are listed; it never recalculates a score."
+            className="lg:col-span-1"
+          >
+            {(control) => (
+              <Select
+                {...control}
+                value={bandFilter}
+                onChange={(event) => setBandFilter(event.target.value as RiskBand | "all")}
+              >
+                <option value="all">All bands ({records.length})</option>
+                {counts.map((band) => (
+                  <option key={band.band} value={band.band}>
+                    {band.label} ({band.count})
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <p
+            aria-live="polite"
+            className="self-end text-supporting text-ink-secondary lg:col-span-2"
+          >
+            Showing {visible.length} of {records.length} returned record
+            {records.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+
+        {visible.length === 0 ? (
+          <EmptyState
+            title="No returned records in this band"
+            message={`The endpoint returned no ${
+              bandFilter === "all" ? "assessed" : humanize(bandFilter)
+            } records. The filter only changes which returned rows are listed; it does not create an assessment.`}
+            action={
+              <Button variant="secondary" size="sm" onClick={() => setBandFilter("all")}>
+                Show all bands
+              </Button>
+            }
+          />
+        ) : (
+          <ul className="divide-y divide-line rounded-card border border-line">
+            {visible.map((record) => (
+              <RiskRow key={record.record_id} record={record} ruleSet={ruleSet} />
+            ))}
+          </ul>
+        )}
+
+        <p className="text-meta text-ink-subtle">
+          Provenance: scores and bands are results of rule set{" "}
+          <span className="font-mono">{ruleSet}</span>; indicator points and explanations are the
+          values the endpoint returned. Filtering changes the list only and never recalculates a
+          score.
+        </p>
       </CardBody>
     </Card>
   );
 }
 
-function RiskRow({ record }: { record: RiskRecordView }) {
+function RiskRow({ record, ruleSet }: { record: RiskRecordView; ruleSet: string }) {
   const tone = toneForRiskBand(record.band);
 
   return (
@@ -622,6 +836,11 @@ function RiskRow({ record }: { record: RiskRecordView }) {
           <Badge tone={tone}>{humanize(record.band)}</Badge>
         </div>
       </div>
+
+      <p className="mt-1 text-meta text-ink-subtle">
+        Score and band from rule set <span className="font-mono">{ruleSet}</span>; score capped at{" "}
+        {MAX_SCORE}.
+      </p>
 
       {/* The number and the band name above already say what this bar shows. */}
       <div

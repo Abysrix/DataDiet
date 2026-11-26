@@ -25,7 +25,7 @@
  * by a signed bearer token that the server verifies on every request.
  */
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { fetchAuthConfig } from "../api/auth";
 import type { AuthConfig, DevLoginRequest, RoleValue } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
@@ -174,6 +174,20 @@ function DevSignInCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; institution?: string }>({});
+  const emailRef = useRef<HTMLInputElement>(null);
+  const institutionRef = useRef<HTMLInputElement>(null);
+  const focusInvalidRef = useRef(false);
+
+  // Validation errors live with their fields. After a failed submit, move focus
+  // to the first invalid control so a keyboard or screen-reader user is taken to
+  // the problem instead of being left on the submit button. Effects run after
+  // the disclosure has been rendered, so a revealed institution field is
+  // focusable by the time this runs.
+  useEffect(() => {
+    if (!focusInvalidRef.current) return;
+    focusInvalidRef.current = false;
+    (fieldErrors.email ? emailRef.current : institutionRef.current)?.focus();
+  }, [fieldErrors]);
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -191,7 +205,13 @@ function DevSignInCard({
       }
     }
     setFieldErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      // A hidden field cannot show or announce its error, so reveal the
+      // disclosure when that field is the one that failed validation.
+      if (nextErrors.institution) setShowAdvanced(true);
+      focusInvalidRef.current = true;
+      return;
+    }
 
     setError(null);
     setSubmitting(true);
@@ -238,14 +258,21 @@ function DevSignInCard({
             error={fieldErrors.email}
             required
           >
+            {/* Password managers need a purpose, not `off`; nothing here
+                rewrites a value the user pastes or types. */}
             {(control) => (
               <Input
                 {...control}
+                ref={emailRef}
                 type="email"
+                name="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="SYNTH-reviewer@datadiet.local"
-                autoComplete="off"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
             )}
           </Field>
@@ -254,6 +281,7 @@ function DevSignInCard({
             {(control) => (
               <Select
                 {...control}
+                name="role"
                 value={role}
                 onChange={(event) => setRole(event.target.value as RoleValue)}
               >
@@ -292,6 +320,7 @@ function DevSignInCard({
                   <Input
                     {...control}
                     type="text"
+                    name="display_name"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                     placeholder="Synthetic Reviewer"
@@ -306,7 +335,9 @@ function DevSignInCard({
                 {(control) => (
                   <Input
                     {...control}
+                    ref={institutionRef}
                     type="number"
+                    name="institution_id"
                     min={1}
                     value={institutionId}
                     onChange={(event) => setInstitutionId(event.target.value)}
@@ -317,9 +348,10 @@ function DevSignInCard({
               <label className="flex items-start gap-3 text-supporting text-ink-secondary">
                 <input
                   type="checkbox"
+                  name="platform_admin"
                   checked={platformAdmin}
                   onChange={(event) => setPlatformAdmin(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded-control border-line-strong accent-accent"
+                  className="mt-0.5 h-4 w-4 rounded-control border-line-strong accent-accent focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
                 />
                 <span>
                   Platform administrator
@@ -334,7 +366,13 @@ function DevSignInCard({
           </Button>
 
           <div className="text-center">
-            <Button type="button" variant="ghost" size="sm" onClick={onUseToken}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="underline underline-offset-2"
+              onClick={onUseToken}
+            >
               Use a bearer token instead
             </Button>
           </div>
@@ -390,11 +428,14 @@ function PastedTokenCard({
             {(control) => (
               <Textarea
                 {...control}
+                name="token"
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
                 className="font-mono text-meta"
                 placeholder="eyJhbGciOiJIUzI1NiIs..."
-                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
             )}
           </Field>

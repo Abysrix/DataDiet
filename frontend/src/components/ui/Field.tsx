@@ -52,8 +52,8 @@ export function Field({ label, hint, error, required = false, className, childre
   };
 
   return (
-    <div className={`space-y-1.5 ${className ?? ""}`}>
-      <label htmlFor={id} className="block text-supporting font-medium text-ink-secondary">
+    <div className={`space-y-2 ${className ?? ""}`}>
+      <label htmlFor={id} className="block text-supporting font-semibold text-ink-secondary">
         {label}
         {required ? (
           <span className="ml-1 text-critical-ink" aria-hidden="true">

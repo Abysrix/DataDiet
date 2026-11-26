@@ -148,6 +148,23 @@ describe("SignIn", () => {
     expect(screen.getByText(/not production authentication/i)).toBeInTheDocument();
   });
 
+  it("starts with a synthetic demo email that password managers can fill and paste can replace", async () => {
+    renderSignIn();
+
+    const email = await screen.findByLabelText(/^email/i);
+    expect(email).toHaveValue("SYNTH-demo@datadiet.local");
+    expect(email).toHaveAttribute("name", "email");
+    expect(email).toHaveAttribute("autocomplete", "username");
+    expect(email).toHaveAttribute("spellcheck", "false");
+
+    await userEvent.clear(email);
+    await userEvent.click(email);
+    await userEvent.paste("SYNTH-reviewer@datadiet.local");
+
+    expect(email).toHaveValue("SYNTH-reviewer@datadiet.local");
+    expect(devLogin).not.toHaveBeenCalled();
+  });
+
   it("keeps optional operator fields behind an explicit disclosure", async () => {
     renderSignIn();
 
@@ -161,6 +178,28 @@ describe("SignIn", () => {
     expect(screen.getByLabelText(/institution id/i)).toBeVisible();
   });
 
+  it("reveals and focuses an invalid advanced field when it blocks submission", async () => {
+    renderSignIn();
+    await screen.findByLabelText(/^email/i);
+    const disclosure = screen.getByRole("button", { name: /advanced options/i });
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    const institution = screen.getByLabelText(/institution id/i);
+    await userEvent.type(institution, "0");
+    await userEvent.click(disclosure);
+    expect(institution).not.toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    expect(await screen.findByText(/positive integer/i)).toBeVisible();
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(institution).toBeVisible();
+    await waitFor(() => expect(institution).toHaveFocus());
+    expect(devLogin).not.toHaveBeenCalled();
+  });
+
   it("reveals the token path from a link instead of a second card", async () => {
     renderSignIn();
 
@@ -171,6 +210,24 @@ describe("SignIn", () => {
 
     expect(await screen.findByLabelText(/bearer token/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^email/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the pasted-token field paste-friendly and free of forced autocomplete off", async () => {
+    renderSignIn();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /use a bearer token instead/i }),
+    );
+    const token = await screen.findByLabelText(/bearer token/i);
+    expect(token).toHaveAttribute("name", "token");
+    expect(token).toHaveAttribute("spellcheck", "false");
+    expect(token).toHaveAttribute("autocapitalize", "none");
+    expect(token).not.toHaveAttribute("autocomplete", "off");
+
+    await userEvent.click(token);
+    await userEvent.paste("SYNTH-token-for-this-deployment");
+
+    expect(token).toHaveValue("SYNTH-token-for-this-deployment");
   });
 
   it("signs in with the form values", async () => {
@@ -187,6 +244,20 @@ describe("SignIn", () => {
     await waitFor(() => {
       expect(devLogin).toHaveBeenCalledWith({ email: "new@example.org", role: "admin" });
     });
+  });
+
+  it("moves focus to an invalid email and keeps its error associated with the field", async () => {
+    renderSignIn();
+
+    const email = await screen.findByLabelText(/^email/i);
+    await userEvent.clear(email);
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    expect(await screen.findByText(/enter an email address/i)).toBeInTheDocument();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+    expect(email.getAttribute("aria-describedby")).toBeTruthy();
+    await waitFor(() => expect(email).toHaveFocus());
+    expect(devLogin).not.toHaveBeenCalled();
   });
 
   it("surfaces the server's refusal instead of faking success", async () => {

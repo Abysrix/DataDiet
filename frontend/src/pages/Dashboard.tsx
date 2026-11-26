@@ -57,14 +57,36 @@ function shareOf(value: number, total: number): string {
   return total > 0 ? `${Math.round((value / total) * 100)}%` : "—";
 }
 
+/** The next legitimate destinations, ranked by the decision a reviewer makes next. */
+const PRIMARY_LINK =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-control bg-accent px-control-x py-control-y text-body font-medium text-on-accent transition-colors hover:bg-accent-hover";
+const SECONDARY_LINK =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-control bg-surface px-control-x py-control-y text-body font-medium text-ink ring-1 ring-inset ring-line-strong transition-colors hover:bg-surface-hover";
+
 export default function Dashboard() {
   const { data, loading, error, refetch } = useApiQuery(fetchDashboard, []);
+  const { has } = useAuth();
 
   return (
     <div>
       <PageHeader
         title="Dashboard"
         description="Inventory volume, sensitivity mix, explainable risk bands, and lifecycle activity across all discovered records."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {has("retention:read") ? (
+              <Link to="/recommendations" className={PRIMARY_LINK}>
+                Review queue
+                <IconChevronRight className="h-4 w-4" />
+              </Link>
+            ) : null}
+            {has("inventory:read") ? (
+              <Link to="/inventory" className={SECONDARY_LINK}>
+                Inspect inventory
+              </Link>
+            ) : null}
+          </div>
+        }
       />
 
       {loading ? <Spinner label="Loading dashboard summary…" /> : null}
@@ -151,7 +173,7 @@ function DashboardContent({ summary }: { summary: DashboardSummary }) {
         <Card>
           <CardHeader
             title="Recommended action mix"
-            description="Illustrative sample values — no retention engine runs yet"
+            description="Synthetic sample values — advisory recommendations only"
           />
           <CardBody>
             <BarList items={actionItems} />
@@ -314,7 +336,7 @@ function AttentionRequired({
     {
       key: "review",
       label: "Marked for review",
-      hint: "Sample values, not engine recommendations",
+      hint: "Advisory, from the synthetic summary",
       value: summary.by_retention_action.review,
       to: "/recommendations",
       permission: "retention:read",
@@ -329,8 +351,8 @@ function AttentionRequired({
     },
     {
       key: "retrieval",
-      label: "Open retrieval requests",
-      hint: "Authorized restore workflows",
+      label: "Retrieval requests (not implemented)",
+      hint: "No restore workflow exists yet",
       value: summary.open_retrieval_requests,
       to: "/retrieval",
       permission: "sources:read",

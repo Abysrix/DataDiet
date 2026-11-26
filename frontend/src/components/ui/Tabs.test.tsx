@@ -35,6 +35,8 @@ describe("Tabs", () => {
     expect(panel).toHaveAccessibleName("Assessment");
     expect(panel).toHaveTextContent("Panel for assessment");
     expect(selected.getAttribute("aria-controls")).toBe(panel.id);
+    // Inactive tabs must not point at panels that are not rendered.
+    expect(screen.getByRole("tab", { name: "History" })).not.toHaveAttribute("aria-controls");
   });
 
   it("labels the tab list itself", () => {

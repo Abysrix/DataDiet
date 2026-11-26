@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { ButtonSize } from "./Button";
+import { FOCUS_RING } from "./control";
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Required: a button with no visible text has nothing else to be read as. */
@@ -44,7 +45,7 @@ export function IconButton({
     <button
       type={type}
       disabled={disabled}
-      className={`inline-flex shrink-0 items-center justify-center rounded-control transition-colors disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className ?? ""}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-control transition-colors disabled:cursor-not-allowed ${FOCUS_RING} ${VARIANTS[variant]} ${SIZES[size]} ${className ?? ""}`}
       {...rest}
     >
       {children}

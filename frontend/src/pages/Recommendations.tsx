@@ -76,7 +76,13 @@ import type {
 } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
-import { IconChevronLeft, IconChevronRight } from "../components/icons";
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconHold,
+  IconInfoCircle,
+  IconRefresh,
+} from "../components/icons";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -332,7 +338,42 @@ export default function Recommendations() {
       <PageHeader
         title="Review Queue"
         description="Each asset's latest retention assessment, read through the retention API. A recommendation is the engine's conclusion, not an instruction: nothing here archives, restores or deletes a file, and recording a decision endorses a recommendation for a later, separately authorized workflow only. Search, filters and paging are evaluated by the server."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="neutral">Advisory decisions only</Badge>
+            <Button variant="secondary" loading={loading} onClick={refetch}>
+              <IconRefresh className="h-4 w-4" />
+              Refresh queue
+            </Button>
+            {has("retention:read") ? (
+              <Link
+                to="/holds"
+                className="inline-flex items-center gap-2 rounded-control px-control-x py-control-y text-supporting font-medium text-accent-ink ring-1 ring-inset ring-line-strong hover:bg-surface-hover"
+              >
+                <IconHold className="h-4 w-4" />
+                Hold context
+              </Link>
+            ) : null}
+          </div>
+        }
       />
+
+      {!canDecide ? (
+        <div
+          role="note"
+          className="flex flex-wrap items-start gap-3 rounded-card border border-info-line bg-info-surface px-card-x py-card-y"
+        >
+          <IconInfoCircle className="mt-0.5 h-5 w-5 shrink-0 text-info-ink" />
+          <div className="min-w-0 space-y-1">
+            <p className="text-supporting font-semibold text-info-ink">Read-only access</p>
+            <p className="text-supporting text-info-ink">
+              Your account can read recommendations and evidence but cannot record a decision: the
+              server requires review:decide. No decision control is shown, and the records already
+              on file stay as they are.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {outcome ? (
         <OutcomeBanner message={outcome} onDismiss={() => setOutcome(null)} />
@@ -434,7 +475,8 @@ function OutcomeBanner({ message, onDismiss }: { message: string; onDismiss: () 
       role="status"
       className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-info-line bg-info-surface px-card-x py-card-y"
     >
-      <p className="text-supporting text-info-ink">{message}</p>
+      <IconInfoCircle className="mt-0.5 h-5 w-5 shrink-0 text-info-ink" />
+      <p className="min-w-0 flex-1 text-supporting text-info-ink">{message}</p>
       <Button variant="ghost" size="sm" onClick={onDismiss}>
         Dismiss
       </Button>
@@ -706,7 +748,7 @@ function QueueRow({
         <p className="mt-1 text-meta text-ink-muted">{severitySentence(item.severity)}</p>
       </TableCell>
       <TableCell>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={toneForReviewStatus(item.review_status ?? "open")}>
             {decided ? "decided" : "open"}
           </Badge>
@@ -1338,14 +1380,14 @@ function Pagination({
   return (
     <nav
       aria-label="Recommendation pagination"
-      className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-card-x py-3"
+      className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-card-x py-card-y"
     >
       <Button
         variant="secondary"
         size="sm"
         disabled={page <= 1}
         onClick={onPrevious}
-        className="gap-1"
+        className="gap-2"
       >
         <IconChevronLeft className="h-4 w-4" />
         Previous
@@ -1358,7 +1400,7 @@ function Pagination({
         size="sm"
         disabled={page >= pages}
         onClick={onNext}
-        className="gap-1"
+        className="gap-2"
       >
         Next
         <IconChevronRight className="h-4 w-4" />

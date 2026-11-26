@@ -50,6 +50,7 @@ import type {
 import { useApiQuery } from "../hooks/useApiQuery";
 import type { ApiQueryState } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
+import { IconInfoCircle, IconRefresh } from "../components/icons";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -349,7 +350,40 @@ export default function Classification() {
       <PageHeader
         title="Classification & Data Quality"
         description="Deterministic, explainable classification proposals computed from inventoried metadata only — never from file contents, and never applied automatically. Quality findings are advisory: nothing is merged, deleted or reclassified from this screen."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="neutral">Metadata only</Badge>
+            <Button
+              variant="secondary"
+              disabled={rules.loading && checks.loading}
+              onClick={() => {
+                rules.refetch();
+                checks.refetch();
+              }}
+            >
+              <IconRefresh className="h-4 w-4" />
+              Refresh catalogues
+            </Button>
+          </div>
+        }
       />
+
+      {!canRun ? (
+        <div
+          role="note"
+          className="mb-gutter flex flex-wrap items-start gap-3 rounded-card border border-info-line bg-info-surface px-card-x py-card-y"
+        >
+          <IconInfoCircle className="mt-0.5 h-5 w-5 shrink-0 text-info-ink" />
+          <div className="min-w-0 space-y-1">
+            <p className="text-supporting font-semibold text-info-ink">Read-only access</p>
+            <p className="text-supporting text-info-ink">
+              Your account can read stored proposals, catalogues and findings, but cannot run a
+              classification: classification:write is required by the server, so no run control is
+              offered.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <AssetWorkspace
         state={state}
@@ -975,7 +1009,7 @@ function FindingRow({
       {Object.keys(finding.evidence).length > 0 ? (
         <details className="mt-1">
           <summary className="cursor-pointer text-supporting font-medium text-accent">Evidence</summary>
-          <pre className="mt-1 overflow-x-auto rounded-card bg-surface-sunken p-3 text-meta text-ink-secondary">
+          <pre className="mt-1 overflow-x-auto rounded-card bg-surface-sunken px-control-x py-row-y text-meta text-ink-secondary">
             {JSON.stringify(finding.evidence, null, 2)}
           </pre>
         </details>

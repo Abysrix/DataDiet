@@ -11,7 +11,8 @@ import {
 } from "./nav";
 import type { NavItem } from "./nav";
 import { HealthIndicator } from "./HealthIndicator";
-import { IconChevronRight, IconClose, IconLogout, IconMenu } from "./icons";
+import { IconChevronRight, IconClose, IconLogout, IconMenu, StatusIcon } from "./icons";
+import { FOCUS_RING, FOCUS_RING_INVERSE } from "./ui/control";
 import { IconButton } from "./ui/IconButton";
 import { useOverlayBehavior } from "./ui/overlayBehavior";
 
@@ -62,9 +63,10 @@ function NavRow({
       aria-current={isPage ? "page" : isCurrent ? "true" : undefined}
       title={item.description}
       className={[
-        "relative flex items-center gap-2.5 rounded-control py-2 pl-3 pr-2.5 text-body transition-colors",
+        "relative flex min-h-9 items-center gap-2.5 rounded-control py-2 pl-3 pr-2.5 text-body transition-colors",
+        FOCUS_RING_INVERSE,
         isCurrent
-          ? "bg-inverse-raised font-semibold text-ink-inverse"
+          ? "bg-inverse-raised font-semibold text-ink-inverse ring-1 ring-inset ring-line-inverse"
           : "text-ink-inverse-muted hover:bg-inverse-hover hover:text-ink-inverse",
       ].join(" ")}
     >
@@ -74,7 +76,7 @@ function NavRow({
           className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-accent"
         />
       ) : null}
-      <Icon className="h-4.5 w-4.5 shrink-0" />
+      <Icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
   );
@@ -116,7 +118,7 @@ function UserPanel({ user }: { user: UserProfile }) {
             onChange={(event) =>
               setActiveInstitution(event.target.value === "" ? null : Number(event.target.value))
             }
-            className="mt-1 w-full rounded-control border border-line-inverse bg-inverse px-2 py-1.5 text-meta text-ink-inverse"
+            className={`mt-1 min-h-9 w-full rounded-control border border-line-inverse bg-inverse px-2 py-control-y text-supporting text-ink-inverse ${FOCUS_RING_INVERSE}`}
           >
             {user.is_platform_admin ? <option value="">All institutions</option> : null}
             {institutions.map((id) => (
@@ -135,7 +137,7 @@ function UserPanel({ user }: { user: UserProfile }) {
       <button
         type="button"
         onClick={signOut}
-        className="flex w-full items-center justify-center gap-2 rounded-control bg-inverse px-3 py-1.5 text-meta font-medium text-ink-inverse ring-1 ring-line-inverse ring-inset transition-colors hover:bg-inverse-hover"
+        className={`flex min-h-9 w-full items-center justify-center gap-2 rounded-control bg-inverse px-3 py-control-y text-supporting font-medium text-ink-inverse ring-1 ring-line-inverse ring-inset transition-colors hover:bg-inverse-hover active:bg-inverse-raised ${FOCUS_RING_INVERSE}`}
       >
         <IconLogout className="h-4 w-4 shrink-0" />
         Sign out
@@ -206,10 +208,13 @@ function SidebarContent({
           Honesty, not styling: what this prototype will not do. The wording is
           a product statement and travels with the shell.
         */}
-        <p role="note" className="text-meta text-ink-inverse-muted">
-          No destructive actions enabled
-          <br />
-          Archiving and disposal are not implemented
+        <p role="note" className="flex items-start gap-2 text-meta text-ink-inverse-muted">
+          <StatusIcon tone="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+          <span>
+            No destructive actions enabled
+            <br />
+            Archiving and disposal are not implemented
+          </span>
         </p>
       </div>
     </div>
@@ -280,7 +285,7 @@ function DetailBreadcrumb({
           <li>
             <Link
               to={parentPath}
-              className="rounded-sm transition-colors hover:text-ink"
+              className={`rounded-sm transition-colors hover:text-ink ${FOCUS_RING}`}
             >
               {parentLabel}
             </Link>
@@ -335,7 +340,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setMobileNavOpen(true)}
-              className="-ml-2 rounded-control p-2 text-ink-secondary transition-colors hover:bg-surface-hover hover:text-ink lg:hidden"
+              className={`-ml-1 inline-flex h-9 w-9 items-center justify-center rounded-control text-ink-secondary transition-colors hover:bg-surface-hover hover:text-ink active:bg-surface-sunken lg:hidden ${FOCUS_RING}`}
               aria-label="Open navigation"
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-navigation"
@@ -351,7 +356,7 @@ export default function Layout() {
                 Not a heading: every page renders its own `PageHeader` H1, and a
                 second heading with the same words would read as a duplicate.
               */}
-              <p className="truncate text-body font-semibold text-ink">{title}</p>
+              <p className="truncate text-body font-semibold tracking-tight text-ink">{title}</p>
               <p className="truncate text-meta text-ink-muted">{description}</p>
             </div>
 
@@ -367,7 +372,7 @@ export default function Layout() {
           <Outlet />
         </main>
 
-        <footer className={`${CONTAINER} pb-page text-meta text-ink-muted`}>
+        <footer className={`${CONTAINER} border-t border-line pb-page pt-4 text-meta text-ink-muted`}>
           DataDiet prototype. Identity and authorization are verified server-side (ADR-0014);
           archiving, restoration, and disposal are not implemented yet.
         </footer>

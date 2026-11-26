@@ -38,6 +38,7 @@ import type { Phase3PolicyStatus, Policy, PolicyVersion } from "../api/types";
 import { toErrorMessage } from "../api/client";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useAuth } from "../auth/AuthContext";
+import { IconInfoCircle } from "../components/icons";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -282,6 +283,23 @@ export default function RetentionPolicies() {
         }
       />
 
+      {!canWrite ? (
+        <div
+          role="note"
+          className="flex flex-wrap items-start gap-3 rounded-card border border-info-line bg-info-surface px-card-x py-card-y"
+        >
+          <IconInfoCircle className="mt-0.5 h-5 w-5 shrink-0 text-info-ink" />
+          <div className="min-w-0 space-y-1">
+            <p className="text-supporting font-semibold text-info-ink">Read-only access</p>
+            <p className="text-supporting text-info-ink">
+              Your account can read policy configuration but cannot create, version or activate a
+              policy: the server requires retention:write for every policy write. No write control
+              is shown here.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {outcome ? <OutcomeBanner message={outcome} onDismiss={() => setOutcome(null)} /> : null}
 
       {loading && data === null ? <Spinner label="Loading retention policies..." /> : null}
@@ -476,7 +494,8 @@ function OutcomeBanner({ message, onDismiss }: { message: string; onDismiss: () 
       role="status"
       className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-info-line bg-info-surface px-card-x py-card-y"
     >
-      <p className="text-supporting text-info-ink">{message}</p>
+      <IconInfoCircle className="mt-0.5 h-5 w-5 shrink-0 text-info-ink" />
+      <p className="min-w-0 flex-1 text-supporting text-info-ink">{message}</p>
       <Button variant="ghost" size="sm" onClick={onDismiss}>
         Dismiss
       </Button>
@@ -502,7 +521,7 @@ function StatusChip({
       type="button"
       aria-pressed={active}
       onClick={onSelect}
-      className={`inline-flex items-center gap-2 rounded-pill px-3 py-1 text-supporting ring-1 ring-inset transition-colors ${
+      className={`inline-flex items-center gap-2 rounded-pill px-control-x py-control-y text-supporting ring-1 ring-inset transition-colors ${
         active
           ? "bg-accent text-on-accent ring-accent"
           : "bg-surface text-ink-secondary ring-line-strong hover:bg-surface-hover"

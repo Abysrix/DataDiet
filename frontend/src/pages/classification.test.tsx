@@ -537,6 +537,25 @@ describe("permission gate", () => {
     expect(runClassification).not.toHaveBeenCalled();
   });
 
+  it("explains read-only access as information, not a disabled run control", () => {
+    renderClassification(testUser({ role: "viewer" }));
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/read-only access/i);
+    expect(note).toHaveTextContent(/classification:write is required by the server/i);
+    expect(screen.queryByRole("button", { name: /run classification/i })).not.toBeInTheDocument();
+  });
+
+  it("ranks a catalogue refresh in the page header without claiming a mutation", async () => {
+    renderClassification();
+    const refresh = await screen.findByRole("button", { name: /refresh catalogues/i });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    await userEvent.click(refresh);
+
+    await waitFor(() => expect(fetchClassificationRules).toHaveBeenCalledTimes(2));
+    expect(fetchQualityChecks).toHaveBeenCalledTimes(2);
+    expect(runClassification).not.toHaveBeenCalled();
+  });
+
   it("keeps the catalogues readable for a role that cannot write", async () => {
     mockReadyAsset();
     renderClassification(testUser({ role: "viewer" }));

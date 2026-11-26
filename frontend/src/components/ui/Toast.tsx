@@ -98,12 +98,12 @@ export function ToastProvider({
         role="region"
         aria-label="Notifications"
         aria-live="polite"
-        className="fixed bottom-gutter right-gutter z-[60] flex w-full max-w-sm flex-col gap-stack"
+        className="fixed bottom-4 left-4 right-4 z-[60] flex flex-col gap-stack sm:bottom-gutter sm:left-auto sm:right-gutter sm:w-full sm:max-w-sm"
       >
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`flex animate-overlay-in items-start gap-2 rounded-overlay px-card-x py-card-y shadow-toast ring-1 ring-inset ${TONE_SURFACE[toast.tone]}`}
+            className={`flex animate-overlay-in items-start gap-2 rounded-overlay px-card-x py-card-y shadow-toast ring-1 ring-inset motion-reduce:animate-none ${TONE_SURFACE[toast.tone]}`}
           >
             <StatusIcon tone={toast.tone} className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">

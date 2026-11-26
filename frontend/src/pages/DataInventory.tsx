@@ -33,7 +33,12 @@ import {
   TableHeaderCell,
   TableRow,
 } from "../components/ui/Table";
-import { IconChevronLeft, IconChevronRight, IconClose } from "../components/icons";
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconClose,
+  IconRefresh,
+} from "../components/icons";
 import { formatBytes, formatDate, humanize } from "../lib/format";
 import { toneForLifecycleStatus, toneForSensitivity } from "../lib/semantic";
 
@@ -72,6 +77,9 @@ interface InventoryQuery {
   category: string;
   sourceType: string;
 }
+
+const QUEUE_LINK =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-control bg-surface px-control-x py-control-y text-body font-medium text-ink ring-1 ring-inset ring-line-strong transition-colors hover:bg-surface-hover";
 
 const DEFAULT_QUERY: InventoryQuery = {
   page: 1,
@@ -151,12 +159,32 @@ export default function DataInventory() {
     query.sourceType !== "";
 
   const canOpenGovernance = has("governance:read");
+  const canReview = has("retention:read");
 
   return (
     <div className="space-y-gutter">
       <PageHeader
         title="Data Inventory"
         description="Assets recorded in the DataDiet inventory database, read through the asset API. Search and filters are evaluated by the server, so the total below is the number of matching assets, not the rows on this page. This view is read-only: archiving, restoration and disposal are not implemented."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={refetch}
+              disabled={loading && data !== null}
+              className="gap-1.5"
+            >
+              <IconRefresh className="h-4 w-4" />
+              Refresh list
+            </Button>
+            {canReview ? (
+              <Link to="/recommendations" className={QUEUE_LINK}>
+                Review queue
+                <IconChevronRight className="h-4 w-4" />
+              </Link>
+            ) : null}
+          </div>
+        }
       />
 
       <FilterCard
@@ -197,7 +225,7 @@ export default function DataInventory() {
                 message={
                   filtersActive
                     ? "No asset in the current institution scope matches these filters. Clear a filter, or change the institution scope in the sidebar, to see more."
-                    : "This scope contains no assets yet. Nothing is scanned automatically, and no source connector has been run."
+                    : "This scope contains no assets yet. Nothing is scanned automatically; records appear only after a reviewed source scan."
                 }
               />
             </CardBody>

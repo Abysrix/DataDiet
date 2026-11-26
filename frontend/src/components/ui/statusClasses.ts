@@ -9,8 +9,9 @@ import type { Tone } from "../../lib/semantic";
  * removed: before, `Badge`, `BarList`, `Toast` and `Progress` each carried their
  * own copy of the same table, and only the first two were tested.
  *
- * Two shapes only: `TONE_SURFACE` is a quiet chip or panel (fill + ink + ring),
- * `TONE_SOLID` is a bar, dot or progress fill.
+ * Three shapes only: `TONE_SURFACE` is a quiet chip or panel (fill + ink +
+ * ring), `TONE_SOLID` is a bar, dot or progress fill, and `TONE_INK` colours a
+ * state glyph that sits on a plain surface.
  */
 
 export const TONE_SURFACE: Record<Tone, string> = {
@@ -31,4 +32,15 @@ export const TONE_SOLID: Record<Tone, string> = {
   caution: "bg-caution",
   critical: "bg-critical",
   accent: "bg-accent",
+};
+
+/** Ink for a state glyph without a filled chip behind it. */
+export const TONE_INK: Record<Tone, string> = {
+  neutral: "text-neutral-ink",
+  info: "text-info-ink",
+  success: "text-success-ink",
+  warning: "text-warning-ink",
+  caution: "text-caution-ink",
+  critical: "text-critical-ink",
+  accent: "text-accent-ink",
 };

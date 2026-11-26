@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { FOCUS_RING } from "./control";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 export type ButtonSize = "sm" | "md";
@@ -50,7 +51,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center rounded-control font-medium transition-colors disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${
+      className={`inline-flex items-center justify-center whitespace-nowrap rounded-control font-medium transition-colors disabled:cursor-not-allowed ${FOCUS_RING} ${VARIANTS[variant]} ${SIZES[size]} ${
         fullWidth ? "w-full" : ""
       } ${className ?? ""}`}
       {...rest}

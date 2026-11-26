@@ -455,6 +455,15 @@ describe("authorization and institution scope", () => {
     expect(activatePolicyVersion).not.toHaveBeenCalled();
   });
 
+  it("explains read-only access instead of showing a write a reviewer cannot perform", async () => {
+    // The default synthetic account is a reviewer: it reads policies but has no retention:write.
+    render(withAuth(<MemoryRouter><RetentionPolicies /></MemoryRouter>, testUser()));
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/read-only access/i);
+    expect(note).toHaveTextContent(/retention:write/i);
+    expect(screen.queryByRole("button", { name: "Create draft policy" })).not.toBeInTheDocument();
+  });
+
   it("asks for the whole platform when the account has no institution scope", async () => {
     listPolicies.mockResolvedValue([{ ...DRAFT, institution_id: null }]);
     render(

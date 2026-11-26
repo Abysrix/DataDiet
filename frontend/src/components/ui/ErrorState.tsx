@@ -1,35 +1,36 @@
-import { IconRefresh } from "../icons";
+import { IconRefresh, StatusIcon } from "../icons";
+import { Button } from "./Button";
 
 export interface ErrorStateProps {
   title?: string;
   message: string;
   onRetry?: () => void;
+  /** Optional operator guidance; no generic "start uvicorn" text by default. */
+  hint?: string;
 }
 
-export function ErrorState({ title = "Something went wrong", message, onRetry }: ErrorStateProps) {
+export function ErrorState({
+  title = "Something went wrong",
+  message,
+  onRetry,
+  hint,
+}: ErrorStateProps) {
   return (
     <div
       role="alert"
       className="rounded-card border border-critical-line bg-critical-surface px-card-x py-6 text-critical-ink"
     >
-      <h2 className="text-section font-semibold">{title}</h2>
-      <p className="mt-1 text-supporting">{message}</p>
-      <p className="mt-2 text-meta text-critical-ink/80">
-        The DataDiet API may not be running. Start it with
-        <code className="mx-1 rounded-control bg-critical-surface px-1 py-0.5 font-mono">
-          uvicorn app.main:app --reload
-        </code>
-        from the <code className="font-mono">backend/</code> directory.
-      </p>
+      <div className="flex items-start gap-2">
+        <StatusIcon tone="critical" className="mt-0.5 h-4 w-4 shrink-0" />
+        <h2 className="text-body font-semibold">{title}</h2>
+      </div>
+      <p className="mt-1 max-w-prose text-supporting">{message}</p>
+      {hint ? <p className="mt-2 text-meta text-critical-ink">{hint}</p> : null}
       {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-4 inline-flex items-center gap-2 rounded-control bg-surface px-3 py-1.5 text-body font-medium text-critical-ink ring-1 ring-critical-line ring-inset hover:bg-critical-surface"
-        >
+        <Button variant="secondary" size="sm" onClick={onRetry} className="mt-4">
           <IconRefresh className="h-4 w-4" />
           Retry
-        </button>
+        </Button>
       ) : null}
     </div>
   );
