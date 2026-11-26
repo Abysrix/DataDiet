@@ -556,3 +556,318 @@ export interface DevLoginRequest {
   role?: RoleValue;
   platform_admin?: boolean;
 }
+
+/* ------------------------------------------------------------------------
+ * Dashboard summary (GET /api/v1/dashboard/summary).
+ * Mirrors backend/app/api/schemas/dashboard.py. Every distribution always
+ * includes every known key, with an explicit zero, so the UI can render stable
+ * charts instead of omitting empty categories.
+ * ------------------------------------------------------------------------ */
+
+export type ScanStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "COMPLETED_WITH_ERRORS"
+  | "FAILED"
+  | "CANCELLED";
+
+export interface DashboardSummary {
+  institution_id: number | null;
+  total_assets: number;
+  lifecycle: Record<LifecycleStatus, number>;
+  sensitivity: Record<AssetSensitivity, number>;
+  risk_bands: Record<RiskBand, number>;
+  active_policies: number;
+  active_holds: number;
+  assessments: number;
+  decisions: number;
+  recommendations: Record<RecommendationState, number>;
+  scan_jobs: Record<ScanStatus, number>;
+  scanned_records: number;
+}
+
+/* ------------------------------------------------------------------------
+ * Documented risk indicators (GET /api/v1/risk/*).
+ * Mirrors backend/app/api/schemas/risk.py. Scores are stored server-side by
+ * app.services.risk; the browser never calculates or invents one.
+ * ------------------------------------------------------------------------ */
+
+export interface RiskIndicator {
+  code: string;
+  label: string;
+  points: number;
+  explanation: string;
+}
+
+export interface RiskAssessmentItem {
+  id: number;
+  asset_id: number;
+  asset_title: string;
+  external_id: string;
+  institution_id: number | null;
+  rule_set: string;
+  score: number;
+  band: RiskBand;
+  indicators: RiskIndicator[];
+  assessed_at: string;
+}
+
+export interface RiskAssessmentList {
+  items: RiskAssessmentItem[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+export interface RiskAssessmentQuery {
+  page?: number;
+  per_page?: number;
+  band?: RiskBand;
+  search?: string;
+  institution_id?: number;
+}
+
+export interface RiskRuleDescriptor {
+  code: string;
+  label: string;
+  points: number;
+  condition: string;
+}
+
+export interface RiskBandDescriptor {
+  band: RiskBand;
+  minimum: number;
+  maximum: number;
+}
+
+export interface RiskRules {
+  rule_set: string;
+  maximum_score: number;
+  bands: RiskBandDescriptor[];
+  rules: RiskRuleDescriptor[];
+}
+
+/* ------------------------------------------------------------------------
+ * Directory management (GET/POST/PATCH/PUT /api/v1/users).
+ * Mirrors backend/app/api/schemas/auth.py. These are local authorization
+ * accounts; no password, invitation or institutional identity is handled here.
+ * ------------------------------------------------------------------------ */
+
+export interface Membership {
+  id: number;
+  app_user_id: number;
+  institution_id: number;
+  role: RoleValue;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+export interface DirectoryUser {
+  id: number;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  is_platform_admin: boolean;
+  memberships: Membership[];
+}
+
+export interface DirectoryUserCreate {
+  email: string;
+  display_name: string;
+  is_platform_admin?: boolean;
+}
+
+export interface DirectoryUserUpdate {
+  display_name?: string;
+  is_active?: boolean;
+  is_platform_admin?: boolean;
+}
+
+export interface MembershipUpsert {
+  institution_id: number;
+  role: RoleValue;
+  is_active?: boolean;
+}
+
+/* ------------------------------------------------------------------------
+ * Sources and scan jobs (/api/v1/sources, /api/v1/scan-jobs).
+ * Mirrors backend/app/api/schemas/connectors.py. Local-folder sources are
+ * addressed by a server-side allow-list key; no absolute path or secret is
+ * accepted from or returned to the browser.
+ * ------------------------------------------------------------------------ */
+
+export type ConnectorType = "synthetic" | "local_folder";
+export type SourceStatus = "active" | "inactive";
+export type ScanStatusValue =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "COMPLETED_WITH_ERRORS"
+  | "FAILED"
+  | "CANCELLED";
+
+export interface Source {
+  id: number;
+  institution_id: number | null;
+  name: string;
+  connector_type: string | null;
+  root_key: string | null;
+  config: Record<string, unknown> | null;
+  status: SourceStatus;
+  created_by: string;
+  last_validated_at: string | null;
+  last_validation_ok: boolean | null;
+  last_validation_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaginatedSources {
+  items: Source[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+export interface SourceCreate {
+  name: string;
+  connector_type: ConnectorType;
+  institution_id?: number;
+  config?: Record<string, unknown>;
+}
+
+export interface SourceValidationResult {
+  id: number;
+  ok: boolean;
+  message: string;
+  validated_at: string | null;
+}
+
+export interface ScanJob {
+  id: number;
+  data_source_id: number;
+  institution_id: number | null;
+  status: ScanStatusValue;
+  batch_size: number;
+  total_discovered: number;
+  total_imported: number;
+  total_skipped: number;
+  total_errors: number;
+  retried_from_job_id: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface PaginatedScanJobs {
+  items: ScanJob[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+export interface ScanResult {
+  id: number;
+  scan_job_id: number;
+  source_key: string;
+  status: string;
+  title: string;
+  record_type: string;
+  category: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  size_bytes: number;
+  sensitivity: string;
+  contains_personal_data: boolean;
+  imported_asset_id: number | null;
+  note: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface PaginatedScanResults {
+  items: ScanResult[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+export interface AssetCreateInput {
+  institution_id?: number;
+  data_source_id: number;
+  external_id: string;
+  title: string;
+  description?: string | null;
+  record_type: string;
+  category?: string | null;
+  source_type?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
+  size_bytes?: number;
+  sensitivity: AssetSensitivity;
+  contains_personal_data?: boolean;
+  owner_team?: string | null;
+  owner_email?: string | null;
+  lifecycle_status?: LifecycleStatus;
+  last_reviewed?: string | null;
+}
+
+export interface AssetUpdateInput {
+  title?: string;
+  description?: string | null;
+  category?: string | null;
+  sensitivity?: AssetSensitivity;
+  contains_personal_data?: boolean;
+  owner_team?: string | null;
+  owner_email?: string | null;
+  lifecycle_status?: LifecycleStatus;
+  last_reviewed?: string | null;
+  size_bytes?: number;
+  mime_type?: string | null;
+  file_name?: string | null;
+}
+
+export interface SourceQuery {
+  page?: number;
+  per_page?: number;
+  status?: SourceStatus;
+  institution_id?: number;
+}
+
+export interface ScanJobQuery {
+  page?: number;
+  per_page?: number;
+  data_source_id?: number;
+  status?: ScanStatusValue;
+  institution_id?: number;
+}
+
+export interface ScanRequestInput {
+  batch_size?: number;
+  run?: boolean;
+}
+
+export interface ScanError {
+  id: number;
+  scan_job_id: number;
+  source_key: string | null;
+  path: string | null;
+  error_message: string;
+  severity: string;
+  created_at: string;
+}
+
+export interface PaginatedScanErrors {
+  items: ScanError[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}

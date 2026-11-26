@@ -11,6 +11,7 @@ import {
 } from "./nav";
 import type { NavItem } from "./nav";
 import { HealthIndicator } from "./HealthIndicator";
+import { ShowcaseBanner } from "./ShowcaseBanner";
 import { IconChevronRight, IconClose, IconLogout, IconMenu, StatusIcon } from "./icons";
 import { FOCUS_RING, FOCUS_RING_INVERSE } from "./ui/control";
 import { IconButton } from "./ui/IconButton";
@@ -323,6 +324,8 @@ export default function Layout() {
       >
         Skip to content
       </a>
+
+      <ShowcaseBanner />
 
       {/* Persistent rail: takes over from the drawer at 1024px. */}
       <aside

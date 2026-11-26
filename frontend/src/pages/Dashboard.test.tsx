@@ -1,62 +1,171 @@
-import { render, screen } from "@testing-library/react";
+/**
+ * Dashboard tests mock the API module: they fix the contract the page uses and
+ * the states it renders, without embedding fixture figures in the page itself.
+ */
+
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DashboardSummary } from "../api/types";
 import { testUser, withAuth } from "../test/auth";
-import type { UserProfile } from "../api/types";
 import Dashboard from "./Dashboard";
 
-function renderDashboard(user: UserProfile = testUser()): void {
+const getDashboardSummary = vi.fn();
+
+vi.mock("../api/dashboard", () => ({
+  getDashboardSummary: (...args: unknown[]) => getDashboardSummary(...args),
+}));
+
+function makeSummary(overrides: Partial<DashboardSummary> = {}): DashboardSummary {
+  return {
+    institution_id: 1,
+    total_assets: 8,
+    lifecycle: {
+      active: 5,
+      under_review: 2,
+      archived: 1,
+      pending_disposal: 0,
+    },
+    sensitivity: {
+      public: 2,
+      internal: 2,
+      confidential: 3,
+      restricted: 1,
+      unknown: 0,
+    },
+    risk_bands: { low: 3, moderate: 2, high: 2, critical: 1 },
+    active_policies: 2,
+    active_holds: 1,
+    assessments: 6,
+    decisions: 4,
+    recommendations: {
+      RETAIN: 2,
+      ARCHIVE_RECOMMENDED: 0,
+      REVIEW_REQUIRED: 3,
+      DISPOSAL_REVIEW_REQUIRED: 1,
+      BLOCKED_BY_HOLD: 0,
+      NO_APPLICABLE_POLICY: 0,
+    },
+    scan_jobs: {
+      PENDING: 0,
+      RUNNING: 0,
+      COMPLETED: 3,
+      COMPLETED_WITH_ERRORS: 0,
+      FAILED: 0,
+      CANCELLED: 0,
+    },
+    scanned_records: 14,
+    ...overrides,
+  };
+}
+
+async function renderDashboard(user = testUser()): Promise<void> {
   render(
     withAuth(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
       user,
     ),
   );
+  await screen.findByText("Assets");
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
+beforeEach(() => {
+  getDashboardSummary.mockReset();
 });
 
-describe("Dashboard", () => {
-  it("makes no data request and states honestly that no live summary is connected", () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockRejectedValue(new Error("no data request is expected"));
+describe("Dashboard data request", () => {
+  it("reads the summary for the active institution scope", async () => {
+    getDashboardSummary.mockResolvedValue(makeSummary());
+    await renderDashboard();
 
-    renderDashboard();
+    expect(getDashboardSummary).toHaveBeenCalledWith(1, expect.any(AbortSignal));
+  });
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+  it("leaves the scope unset for an unscoped platform administrator", async () => {
+    getDashboardSummary.mockResolvedValue(makeSummary({ institution_id: null }));
+    await renderDashboard(testUser({ is_platform_admin: true, institutions: [] }));
+
+    expect(getDashboardSummary).toHaveBeenCalledWith(null, expect.any(AbortSignal));
+  });
+
+  it("does not request a summary without inventory:read", () => {
+    render(
+      withAuth(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+        testUser({ permissions: [] }),
+      ),
+    );
+
+    expect(getDashboardSummary).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: /no live dashboard data/i }),
+      screen.getByRole("heading", { name: /dashboard data is not available to this account/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("note")).toBeNull();
-    expect(document.body).not.toHaveTextContent(/synthetic/i);
-    expect(document.body).not.toHaveTextContent(/SYNTH-/i);
   });
 
-  it("keeps the next destinations the account can read", () => {
-    renderDashboard();
+  it("does not request a summary while signed out", () => {
+    render(
+      withAuth(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+        null,
+      ),
+    );
 
-    expect(screen.getByRole("link", { name: /review queue/i })).toHaveAttribute(
-      "href",
-      "/recommendations",
-    );
-    expect(screen.getByRole("link", { name: /inspect inventory/i })).toHaveAttribute(
-      "href",
-      "/inventory",
-    );
+    expect(getDashboardSummary).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: /go to sign in/i })).toBeInTheDocument();
+  });
+});
+
+describe("Dashboard rendering", () => {
+  it("shows only figures returned by the API", async () => {
+    getDashboardSummary.mockResolvedValue(makeSummary());
+    await renderDashboard();
+
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText("14")).toBeInTheDocument();
+    expect(screen.getByText("High or critical risk")).toBeInTheDocument();
+    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Lifecycle distribution")).toBeInTheDocument();
+    expect(screen.getByText("Risk bands")).toBeInTheDocument();
+    expect(screen.getByText("Review queue")).toHaveAttribute("href", "/recommendations");
+    expect(screen.getByText("Inspect inventory")).toHaveAttribute("href", "/inventory");
   });
 
-  it("omits a destination the account cannot open", () => {
-    renderDashboard(testUser({ permissions: ["inventory:read"] }));
-
-    expect(screen.queryByRole("link", { name: /review queue/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /inspect inventory/i })).toHaveAttribute(
-      "href",
-      "/inventory",
+  it("renders an explicit empty state when the API returns zero assets", async () => {
+    getDashboardSummary.mockResolvedValue(
+      makeSummary({
+        total_assets: 0,
+        lifecycle: { active: 0, under_review: 0, archived: 0, pending_disposal: 0 },
+        sensitivity: { public: 0, internal: 0, confidential: 0, restricted: 0, unknown: 0 },
+        risk_bands: { low: 0, moderate: 0, high: 0, critical: 0 },
+        scanned_records: 0,
+      }),
     );
+    await renderDashboard();
+
+    expect(
+      screen.getByRole("heading", { name: /no records in this scope/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a retryable error instead of inventing figures", async () => {
+    getDashboardSummary.mockRejectedValue(new Error("summary service unavailable"));
+    render(
+      withAuth(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+      ),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("summary service unavailable");
+    await userEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(getDashboardSummary).toHaveBeenCalledTimes(2));
   });
 });

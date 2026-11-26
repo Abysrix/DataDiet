@@ -7,6 +7,8 @@ import { ToastProvider } from "./components/ui/Toast";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import DataInventory from "./pages/DataInventory";
+import AssetEditor from "./pages/AssetEditor";
+import Sources from "./pages/Sources";
 import RiskAnalysis from "./pages/RiskAnalysis";
 import Classification from "./pages/Classification";
 import RetentionPolicies from "./pages/RetentionPolicies";
@@ -18,6 +20,7 @@ import Archive from "./pages/Archive";
 import RetrievalRequests from "./pages/RetrievalRequests";
 import Reports from "./pages/Reports";
 import UserManagement from "./pages/UserManagement";
+import ShowcaseGuide from "./pages/ShowcaseGuide";
 import NotFound from "./pages/NotFound";
 
 /**
@@ -79,6 +82,9 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inventory" element={<DataInventory />} />
+            <Route path="/inventory/new" element={<AssetEditor />} />
+            <Route path="/inventory/:assetId/edit" element={<AssetEditor />} />
+            <Route path="/sources" element={<Sources />} />
             <Route path="/risk" element={<RiskAnalysis />} />
             <Route path="/classification" element={<Classification />} />
             <Route path="/retention" element={<RetentionPolicies />} />
@@ -90,6 +96,7 @@ export default function App() {
             <Route path="/retrieval" element={<RetrievalRequests />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<UserManagement />} />
+            <Route path="/showcase" element={<ShowcaseGuide />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

@@ -11,8 +11,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listAssets } from "./assets";
-import type { AssetListResponse } from "./types";
+import { createAsset, getAsset, listAssets, updateAsset } from "./assets";
+import type { Asset, AssetListResponse } from "./types";
 
 function jsonResponse(payload: unknown): Response {
   return {
@@ -103,5 +103,44 @@ describe("listAssets", () => {
       per_page: 20,
       pages: 3,
     });
+  });
+});
+
+describe("asset reads and writes", () => {
+  const asset = { id: 12, title: "Fictional asset" } as Asset;
+
+  it("gets one asset by id with the caller's signal", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(asset));
+    const controller = new AbortController();
+
+    await expect(getAsset(12, controller.signal)).resolves.toEqual(asset);
+    expect(spy.mock.calls[0][0]).toBe("/api/v1/assets/12");
+    expect((spy.mock.calls[0][1] as RequestInit).signal).toBe(controller.signal);
+  });
+
+  it("posts the create body to the asset collection", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(asset));
+    const input = {
+      data_source_id: 3,
+      external_id: "SYNTH-ASSET-012",
+      title: "Fictional asset",
+      record_type: "dataset",
+      sensitivity: "internal" as const,
+    };
+
+    await expect(createAsset(input)).resolves.toEqual(asset);
+    expect(spy.mock.calls[0][0]).toBe("/api/v1/assets");
+    expect((spy.mock.calls[0][1] as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body))).toEqual(input);
+  });
+
+  it("patches only the supplied fields on one asset", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(asset));
+    const input = { title: "Renamed fictional asset", sensitivity: "confidential" as const };
+
+    await expect(updateAsset(12, input)).resolves.toEqual(asset);
+    expect(spy.mock.calls[0][0]).toBe("/api/v1/assets/12");
+    expect((spy.mock.calls[0][1] as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body))).toEqual(input);
   });
 });

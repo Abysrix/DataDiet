@@ -1,10 +1,37 @@
+/**
+ * User Management: the verified session profile plus the real directory API.
+ *
+ * The directory section is available only to accounts holding the
+ * server-verified `users:manage` permission. It calls the existing user routes:
+ * list, create, activate/deactivate, and grant/change an institution role.
+ * There is no password, invitation, identity-provider sync, or account deletion
+ * here, and no success is shown until the server returns the written row.
+ */
+
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import {
+  createUser,
+  listUsers,
+  updateUser,
+  upsertMembership,
+} from "../api/users";
+import type {
+  DirectoryUser,
+  RoleValue,
+  UserProfile,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
+import { ErrorState } from "../components/ui/ErrorState";
+import { Field } from "../components/ui/Field";
+import { Input } from "../components/ui/Input";
 import { FOCUS_RING } from "../components/ui/control";
+import { Select } from "../components/ui/Select";
 import { Spinner } from "../components/ui/Spinner";
 import {
   Table,
@@ -14,26 +41,30 @@ import {
   TableHeaderCell,
   TableRow,
 } from "../components/ui/Table";
-import { IconChevronRight, IconShield, IconUsers } from "../components/icons";
+import { IconChevronRight, IconRefresh, IconShield, IconUsers } from "../components/icons";
+import { useApiQuery } from "../hooks/useApiQuery";
+import { toErrorMessage } from "../api/client";
+import { humanize } from "../lib/format";
 
 const LINK_CLASS = `inline-flex items-center gap-1 rounded-control font-medium text-accent-ink transition-colors hover:text-accent hover:underline ${FOCUS_RING}`;
+const ROLES: RoleValue[] = ["viewer", "reviewer", "admin"];
 
 const NOT_IMPLEMENTED = [
   {
-    title: "Directory browsing",
-    detail: "No account list is loaded by this page; it shows only the current session profile.",
+    title: "Passwords and local signup",
+    detail: "No credential is accepted, stored, or changed by this UI. Password signup is not implemented.",
   },
   {
-    title: "Role and membership changes",
-    detail: "No form here grants, changes, or revokes an institution role.",
-  },
-  {
-    title: "Account lifecycle edits",
-    detail: "No create, activate, deactivate, invite, or delete control is exposed.",
+    title: "Institutional identity synchronization",
+    detail: "No external directory is contacted and no real person's identity is imported.",
   },
   {
     title: "Approval delegation and access-review export",
     detail: "No delegation rules or report are connected to this UI.",
+  },
+  {
+    title: "Account deletion",
+    detail: "No account is deleted. Deactivation is reversible and is recorded in the audit trail by the API.",
   },
 ];
 
@@ -48,22 +79,376 @@ function ProfileItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+interface Notice {
+  tone: "success" | "critical";
+  text: string;
+}
+
+function DirectoryNotice({ notice }: { notice: Notice | null }) {
+  if (!notice) {
+    return null;
+  }
+  return (
+    <div
+      role={notice.tone === "critical" ? "alert" : "status"}
+      className={`rounded-card border px-card-x py-card-y text-supporting ${
+        notice.tone === "critical"
+          ? "border-critical-line bg-critical-surface text-critical-ink"
+          : "border-success-line bg-success-surface text-success-ink"
+      }`}
+    >
+      {notice.text}
+    </div>
+  );
+}
+
+function CreateAccountForm({
+  onCreated,
+}: {
+  onCreated: (message: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const user = await createUser({ email, display_name: displayName });
+      setEmail("");
+      setDisplayName("");
+      onCreated(`Created account #${user.id} <${user.email}>.`);
+    } catch (cause) {
+      setError(toErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Field label="Email" required>
+        {(control) => (
+          <Input
+            {...control}
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="reviewer@example.org"
+          />
+        )}
+      </Field>
+      <Field label="Display name" required>
+        {(control) => (
+          <Input
+            {...control}
+            required
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder="Reviewer"
+          />
+        )}
+      </Field>
+      {error ? <DirectoryNotice notice={{ tone: "critical", text: error }} /> : null}
+      <Button type="submit" disabled={busy || !email || !displayName}>
+        Create account
+      </Button>
+    </form>
+  );
+}
+
+function MembershipForm({
+  users,
+  institutions,
+  onChanged,
+}: {
+  users: DirectoryUser[];
+  institutions: number[];
+  onChanged: (user: DirectoryUser, message: string) => void;
+}) {
+  const [userId, setUserId] = useState<number | "">("");
+  const [institutionId, setInstitutionId] = useState<number | "">("");
+  const [role, setRole] = useState<RoleValue>("viewer");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (userId === "" || institutionId === "") {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const user = await upsertMembership(userId, {
+        institution_id: institutionId,
+        role,
+        is_active: true,
+      });
+      onChanged(user, `Set institution #${institutionId} role to ${role}.`);
+    } catch (cause) {
+      setError(toErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Field label="Account" required>
+        {(control) => (
+          <Select
+            {...control}
+            value={userId}
+            onChange={(event) =>
+              setUserId(event.target.value === "" ? "" : Number(event.target.value))
+            }
+          >
+            <option value="">Select an account</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.display_name} (#{user.id})
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <Field label="Institution" required>
+        {(control) => (
+          <Select
+            {...control}
+            value={institutionId}
+            onChange={(event) =>
+              setInstitutionId(event.target.value === "" ? "" : Number(event.target.value))
+            }
+          >
+            <option value="">Select an institution</option>
+            {institutions.map((id) => (
+              <option key={id} value={id}>
+                Institution #{id}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <Field label="Role" required>
+        {(control) => (
+          <Select
+            {...control}
+            value={role}
+            onChange={(event) => setRole(event.target.value as RoleValue)}
+          >
+            {ROLES.map((value) => (
+              <option key={value} value={value}>
+                {humanize(value)}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      {error ? <DirectoryNotice notice={{ tone: "critical", text: error }} /> : null}
+      <Button
+        type="submit"
+        disabled={busy || userId === "" || institutionId === "" || institutions.length === 0}
+      >
+        Grant or change role
+      </Button>
+    </form>
+  );
+}
+
+function DirectoryManager({ session }: { session: UserProfile }) {
+  const { data, loading, error, refetch } = useApiQuery((signal) => listUsers(signal), []);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const users = data ?? [];
+  const institutions = Array.from(
+    new Set([
+      ...session.institutions,
+      ...users.flatMap((user) => user.memberships.map((membership) => membership.institution_id)),
+    ]),
+  ).sort((a, b) => a - b);
+
+  async function toggleActive(user: DirectoryUser): Promise<void> {
+    setBusyId(user.id);
+    setNotice(null);
+    try {
+      const updated = await updateUser(user.id, { is_active: !user.is_active });
+      setNotice({
+        tone: "success",
+        text: `${updated.display_name} is now ${updated.is_active ? "active" : "inactive"}.`,
+      });
+      refetch();
+    } catch (cause) {
+      setNotice({ tone: "critical", text: toErrorMessage(cause) });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-gutter">
+      <DirectoryNotice notice={notice} />
+
+      {error ? (
+        <ErrorState title="Directory unavailable" message={error} onRetry={refetch} />
+      ) : null}
+      {loading && data === null ? (
+        <Card>
+          <CardHeader title="Loading directory" description="Reading accounts from the user API." />
+          <CardBody>
+            <Spinner label="Loading directory…" />
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {data ? (
+        <Card>
+          <CardHeader
+            title={`Directory accounts (${users.length})`}
+            description="Local authorization records returned by the user API. No password or institutional identity is stored here."
+            action={
+              <Button variant="secondary" onClick={refetch} className="gap-1.5" disabled={loading}>
+                <IconRefresh className="h-4 w-4" />
+                Refresh
+              </Button>
+            }
+          />
+          {users.length === 0 ? (
+            <CardBody>
+              <EmptyState
+                title="No directory accounts"
+                message="The API returned no accounts in this deployment."
+              />
+            </CardBody>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table caption="Directory accounts">
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell scope="col">Account</TableHeaderCell>
+                    <TableHeaderCell scope="col">State</TableHeaderCell>
+                    <TableHeaderCell scope="col">Administration</TableHeaderCell>
+                    <TableHeaderCell scope="col">Memberships</TableHeaderCell>
+                    <TableHeaderCell scope="col" align="right">
+                      Action
+                    </TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <p className="font-medium text-ink">{user.display_name}</p>
+                        <p className="mt-0.5 break-all text-meta text-ink-muted">{user.email}</p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge tone={user.is_active ? "success" : "neutral"}>
+                          {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.is_platform_admin ? (
+                          <Badge tone="info">Platform admin</Badge>
+                        ) : (
+                          <span className="text-meta text-ink-muted">Institution role only</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.memberships.length === 0 ? (
+                          <span className="text-meta text-ink-muted">None</span>
+                        ) : (
+                          <ul className="space-y-0.5 text-meta text-ink-secondary">
+                            {user.memberships.map((membership) => (
+                              <li key={membership.id}>
+                                #{membership.institution_id} · {humanize(membership.role)} ·{" "}
+                                {membership.is_active ? "active" : "inactive"}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busyId === user.id}
+                          onClick={() => void toggleActive(user)}
+                        >
+                          {user.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-gutter xl:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Create an account"
+            description="The new local account has no memberships until a role is granted below."
+          />
+          <CardBody>
+            <CreateAccountForm
+              onCreated={(message) => {
+                setNotice({ tone: "success", text: message });
+                refetch();
+              }}
+            />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader
+            title="Grant or change an institution role"
+            description="Writes one membership through the user API; the server records the actor in the audit trail."
+          />
+          <CardBody>
+            {institutions.length === 0 ? (
+              <EmptyState
+                title="No institution available"
+                message="No institution is known from the session or the directory, so no role can be granted."
+              />
+            ) : (
+              <MembershipForm
+                users={users}
+                institutions={institutions}
+                onChanged={(_user, message) => {
+                  setNotice({ tone: "success", text: message });
+                  refetch();
+                }}
+              />
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /**
- * This page is a read-only explanation of `GET /auth/me`, not a directory
- * client. It makes role and institution scope legible while stating exactly
- * what was verified: a local authorization profile for this token, never an
- * institutional identity record or a person's real-world role.
+ * A session profile is shown to every signed-in account. Directory management
+ * is mounted only after the server-verified permission check succeeds, so an
+ * account without `users:manage` never provokes a refused request.
  */
 export default function UserManagement() {
   const { status, user, activeInstitutionId, has } = useAuth();
   const canManage = has("users:manage");
 
   return (
-    <div>
+    <div className="space-y-gutter">
       <PageHeader
         title="User Management"
-        description="A read-only view of the authorization profile DataDiet verified for this browser session. No directory is loaded and no account operation is performed here."
-        actions={<Badge tone="neutral">Read-only</Badge>}
+        description="A verified view of this session plus the real local directory. Directory operations are available only when the server grants users:manage."
+        actions={<Badge tone={canManage ? "info" : "neutral"}>{canManage ? "Directory access" : "Read-only"}</Badge>}
       />
 
       {status === "loading" ? (
@@ -98,7 +483,7 @@ export default function UserManagement() {
           </CardBody>
         </Card>
       ) : (
-        <div className="space-y-gutter">
+        <>
           <Card>
             <CardHeader
               title="Current session profile"
@@ -188,55 +573,50 @@ export default function UserManagement() {
             </CardBody>
           </Card>
 
-          <div className="grid grid-cols-1 gap-gutter xl:grid-cols-5">
-            <Card className="xl:col-span-2">
+          {status === "authenticated" && canManage ? (
+            <DirectoryManager session={user} />
+          ) : (
+            <Card>
               <CardHeader
-                title="Management permission"
-                description="Whether this session may call the server's user routes, and what this page does about it."
-                action={
-                  <Badge tone={canManage ? "info" : "neutral"}>
-                    {canManage ? "Permission present" : "Permission absent"}
-                  </Badge>
-                }
+                title="Directory management permission"
+                description="Whether this session may call the server's directory routes, and what this page does about it."
+                action={<Badge tone="neutral">Permission absent</Badge>}
               />
-              <CardBody className="space-y-gutter">
-                <div className="flex flex-wrap items-start gap-3">
-                  <IconUsers className="h-5 w-5 shrink-0 text-ink-secondary" />
-                  <p className="min-w-0 flex-1 text-supporting text-ink-secondary">
-                    {canManage
-                      ? "Your account holds users:manage, but this UI has no client for the directory routes. No account is created, changed, activated, or revoked from here."
-                      : "Your account does not hold users:manage. The server would refuse directory-management requests, so none are attempted here."}
-                  </p>
-                </div>
-                <p className="text-meta text-ink-muted">
-                  Institution administrators manage policies and sources in their own scope; they
-                  do not administer identities. Platform administration is a separate directory
-                  flag.
+              <CardBody className="flex items-start gap-3">
+                <IconUsers className="h-5 w-5 shrink-0 text-ink-secondary" />
+                <p className="text-supporting text-ink-secondary">
+                  Your account does not hold users:manage. The server would refuse directory
+                  requests, so none are attempted here.
                 </p>
               </CardBody>
             </Card>
+          )}
 
-            <Card className="xl:col-span-3">
-              <CardHeader
-                title="Not implemented in this UI"
-                description="Planned directory work, explicitly not wired to a form or a fake success state."
-              />
-              <CardBody className="p-0">
-                <ul className="divide-y divide-line">
-                  {NOT_IMPLEMENTED.map((item) => (
-                    <li key={item.title} className="px-card-x py-card-y">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <p className="text-body font-medium text-ink">{item.title}</p>
-                        <Badge tone="neutral">Not implemented</Badge>
-                      </div>
-                      <p className="mt-1 text-meta text-ink-muted">{item.detail}</p>
-                    </li>
-                  ))}
-                </ul>
-              </CardBody>
-            </Card>
-          </div>
-        </div>
+          <Card>
+            <CardHeader
+              title="Not implemented in this UI"
+              description="Planned identity work, explicitly not wired to a form or a fake success state."
+            />
+            <CardBody className="p-0">
+              <ul className="divide-y divide-line">
+                {NOT_IMPLEMENTED.map((item) => (
+                  <li key={item.title} className="px-card-x py-card-y">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-body font-medium text-ink">{item.title}</p>
+                      <Badge tone="neutral">Not implemented</Badge>
+                    </div>
+                    <p className="mt-1 text-meta text-ink-muted">{item.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
+
+          <p className="text-meta text-ink-muted">
+            Directory records were last loaded on this page only; no timestamps are inferred.
+            Membership audit events are written by the server, not by this component.
+          </p>
+        </>
       )}
     </div>
   );

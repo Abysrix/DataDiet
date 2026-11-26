@@ -54,6 +54,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: "discover",
   },
   {
+    to: "/sources",
+    label: "Sources & Scans",
+    description: "Synthetic connector and scan history",
+    Icon: IconInventory,
+    permission: "sources:read",
+    group: "discover",
+  },
+  {
     to: "/inventory",
     label: "Data Inventory",
     description: "Records discovered from sources",
@@ -179,6 +187,12 @@ export interface DetailRoute {
 }
 
 const DETAIL_ROUTES: DetailRoute[] = [
+  {
+    prefix: "/inventory/",
+    parent: "/inventory",
+    title: "Asset Editor",
+    description: "Create or edit one inventory record through the real asset API.",
+  },
   {
     prefix: "/assessments/",
     parent: "/retention",

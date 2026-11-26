@@ -5,9 +5,9 @@
  * involved. Search and every filter are applied by the server, so the count in
  * the results header is the server's own `total`, not the length of one page.
  *
- * The page is read-only by design: the asset API's write endpoints need a
- * different permission, and archiving, restoration and disposal are not
- * implemented anywhere in this product.
+ * Editing is offered only when the verified session holds `assets:write`; those
+ * links open the real asset API form. Archiving, restoration and disposal are
+ * not implemented anywhere in this product, so no control offers them.
  */
 
 import { useEffect, useState } from "react";
@@ -37,6 +37,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconClose,
+  IconPlus,
   IconRefresh,
 } from "../components/icons";
 import { formatBytes, formatDate, humanize } from "../lib/format";
@@ -160,12 +161,13 @@ export default function DataInventory() {
 
   const canOpenGovernance = has("governance:read");
   const canReview = has("retention:read");
+  const canWrite = has("assets:write");
 
   return (
     <div className="space-y-gutter">
       <PageHeader
         title="Data Inventory"
-        description="Assets recorded in the DataDiet inventory database, read through the asset API. Search and filters are evaluated by the server, so the total below is the number of matching assets, not the rows on this page. This view is read-only: archiving, restoration and disposal are not implemented."
+        description="Assets recorded in the DataDiet inventory database, read through the asset API. Search and filters are evaluated by the server, so the total below is the number of matching assets, not the rows on this page. Edits use the real asset API; archiving, restoration and disposal are not implemented."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -177,6 +179,12 @@ export default function DataInventory() {
               <IconRefresh className="h-4 w-4" />
               Refresh list
             </Button>
+            {canWrite ? (
+              <Link to="/inventory/new" className={QUEUE_LINK}>
+                <IconPlus className="h-4 w-4" />
+                New asset
+              </Link>
+            ) : null}
             {canReview ? (
               <Link to="/recommendations" className={QUEUE_LINK}>
                 Review queue
@@ -230,7 +238,11 @@ export default function DataInventory() {
               />
             </CardBody>
           ) : (
-            <AssetTable items={data.items} canOpenGovernance={canOpenGovernance} />
+            <AssetTable
+              items={data.items}
+              canOpenGovernance={canOpenGovernance}
+              canWrite={canWrite}
+            />
           )}
 
           <Pagination
@@ -382,9 +394,11 @@ function LoadingAssets() {
 function AssetTable({
   items,
   canOpenGovernance,
+  canWrite,
 }: {
   items: Asset[];
   canOpenGovernance: boolean;
+  canWrite: boolean;
 }) {
   return (
     <Table caption="Assets in the current inventory view">
@@ -398,19 +412,32 @@ function AssetTable({
             Size
           </TableHeaderCell>
           <TableHeaderCell className="hidden xl:table-cell">Updated</TableHeaderCell>
-          <TableHeaderCell align="right">Governance</TableHeaderCell>
+          <TableHeaderCell align="right">Actions</TableHeaderCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {items.map((asset) => (
-          <AssetRow key={asset.id} asset={asset} canOpenGovernance={canOpenGovernance} />
+          <AssetRow
+            key={asset.id}
+            asset={asset}
+            canOpenGovernance={canOpenGovernance}
+            canWrite={canWrite}
+          />
         ))}
       </TableBody>
     </Table>
   );
 }
 
-function AssetRow({ asset, canOpenGovernance }: { asset: Asset; canOpenGovernance: boolean }) {
+function AssetRow({
+  asset,
+  canOpenGovernance,
+  canWrite,
+}: {
+  asset: Asset;
+  canOpenGovernance: boolean;
+  canWrite: boolean;
+}) {
   return (
     <TableRow>
       <TableCell className="max-w-sm">
@@ -464,18 +491,29 @@ function AssetRow({ asset, canOpenGovernance }: { asset: Asset; canOpenGovernanc
         </time>
       </TableCell>
       <TableCell align="right">
-        {canOpenGovernance ? (
-          <Link
-            to={`/governance/assets/${asset.id}`}
-            className="inline-flex items-center gap-1 whitespace-nowrap rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
-          >
-            Open
-            <IconChevronRight className="h-3.5 w-3.5" />
-            <span className="sr-only">governance view for {asset.title}</span>
-          </Link>
-        ) : (
-          <span className="text-meta text-ink-subtle">—</span>
-        )}
+        <span className="inline-flex flex-wrap items-center justify-end gap-3">
+          {canWrite ? (
+            <Link
+              to={`/inventory/${asset.id}/edit`}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
+            >
+              Edit
+              <span className="sr-only">metadata for {asset.title}</span>
+            </Link>
+          ) : null}
+          {canOpenGovernance ? (
+            <Link
+              to={`/governance/assets/${asset.id}`}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-control text-meta font-medium text-accent-ink transition-colors hover:text-accent hover:underline"
+            >
+              Open
+              <IconChevronRight className="h-3.5 w-3.5" />
+              <span className="sr-only">governance view for {asset.title}</span>
+            </Link>
+          ) : (
+            <span className="text-meta text-ink-subtle">—</span>
+          )}
+        </span>
       </TableCell>
     </TableRow>
   );

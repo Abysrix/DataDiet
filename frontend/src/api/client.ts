@@ -143,7 +143,11 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
   return (await response.json()) as T;
 }
 
-async function requestJson<T>(method: "POST" | "PATCH", path: string, body: unknown): Promise<T> {
+async function requestJson<T>(
+  method: "POST" | "PATCH" | "PUT",
+  path: string,
+  body: unknown,
+): Promise<T> {
   const headers = await requestHeaders({ "Content-Type": "application/json" });
   let response: Response;
   try {
@@ -176,6 +180,11 @@ export async function apiPost<T>(path: string, body: unknown = {}): Promise<T> {
 /** Sends a JSON PATCH request and returns the parsed response. */
 export async function apiPatch<T>(path: string, body: unknown = {}): Promise<T> {
   return requestJson<T>("PATCH", path, body);
+}
+
+/** Sends a JSON PUT request and returns the parsed response. */
+export async function apiPut<T>(path: string, body: unknown = {}): Promise<T> {
+  return requestJson<T>("PUT", path, body);
 }
 
 /** Turns any thrown value into a display-ready message. */
