@@ -472,6 +472,14 @@ decision and runbook, not a verified deployment. Nothing here makes development
 sign-in valid in a protected environment or turns the demo into a production
 system.
 
+**Verification (2026-11-27).** Render rebuilt from commit `581b608` on
+`render-demo`; Vercel aliased `dpl_C6S4bAhwoWdwUExxKNK742GRUUWd` to the public
+SPA origin. Health, readiness, exact-origin CORS, viewer login, allow-listed
+elevation and unlisted 403 all passed against the live service. The shipped JS
+contains the Render URL and no tunnel URL; the hosted browser called only
+Render. Section 9 of `docs/render-azure-sql-demo.md` is the evidence record.
+The free-tier sleep trade-off and the synthetic-data boundary are unchanged.
+
 ---
 
 ## ADR-0029 — Allow-list privileged fields on the public dev-login
@@ -503,3 +511,10 @@ refusal before writes and the allow-listed success path. The instruction that
 named the admin email is now part of the runbook rather than a hidden UI trick.
 This is demo hardening, not production authentication: protected environments
 still do not register the route, and bearer tokens still live in client storage.
+
+**Verification (2026-11-27).** After Render rebuilt from the hardened commit,
+an unlisted `SYNTH-attacker@datadiet.local` request with `platform_admin: true`
+received 403, while `SYNTH-admin@datadiet.local` received an elevated token
+through the same public route. This closes the observed escalation without
+changing the viewer path. The next production iteration replaces this route
+with local email/password accounts.

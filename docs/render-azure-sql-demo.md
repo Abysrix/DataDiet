@@ -6,16 +6,17 @@ stays on Vercel; the API moves to Render; the database remains the existing
 Azure SQL Database `datadiet_demo`. No Azure credits are spent, no real
 institutional data is uploaded, and no destructive lifecycle action is enabled.
 
-> Status: prepared after ADR-0028. Service creation, firewall widening, and the
-> Vercel cutover must be verified live before this document claims they are done.
-> Render's free plan sleeps after ~15 minutes of inactivity and takes about a
-> minute to wake; the operator has explicitly accepted that trade-off.
+> Status: verified live on 2026-11-27 after ADR-0028/0029. Section 9 records the
+> exact commit, deployment IDs and live checks. Render's free plan still sleeps
+> after ~15 minutes of inactivity and takes about a minute to wake; the operator
+> has explicitly accepted that trade-off.
 
 ## 1. Source and build
 
-Use the GitHub branch `render-demo` from `Abysrix/DataDiet` (commit `910035d` at
-the time of writing). The repository also has an unrelated `main` history; do
-not switch the service to `main` without reconciling that history first.
+Use the GitHub branch `render-demo` from `Abysrix/DataDiet` (commit `581b608`,
+which includes the ADR-0029 hardening and the redesigned UI). The repository
+also has an unrelated `main` history; do not switch the service to `main`
+without reconciling that history first.
 
 | Render setting | Value |
 | --- | --- |
@@ -148,7 +149,7 @@ Invoke-RestMethod "$api/api/v1/auth/dev-login" -Method Post `
 Set the Vercel project environment variable, then redeploy:
 
 ```text
-VITE_API_BASE_URL=https://<render-service>.onrender.com
+VITE_API_BASE_URL=https://datadiet-demo-api.onrender.com
 ```
 
 Only `VITE_*` reaches the browser bundle; no database or signing secret is sent
@@ -179,3 +180,28 @@ Stop the Cloudflare tunnel only after all of the above pass.
 - Do not set `0.0.0.0/0`, do not publish the SQL password, and do not mark this
   deployment production-ready without the work in
   `docs/production-readiness.md`.
+
+## 9. Verified cutover (2026-11-27)
+
+The pushed source is `Abysrix/DataDiet:render-demo` commit `581b608`
+(`7017faf` security hardening plus `581b608` UI redesign). Render rebuilt the
+service from that branch and Vercel aliased deployment
+`dpl_C6S4bAhwoWdwUExxKNK742GRUUWd` to `https://datadiet-demo.vercel.app`.
+
+Live checks after both deployments:
+
+- `GET /api/v1/health` → 200; `GET /api/v1/health/ready` → database reachable.
+- CORS preflight from `https://datadiet-demo.vercel.app` reflects that exact
+  origin; no wildcard.
+- Viewer dev-login returns a bearer token; allow-listed
+  `SYNTH-admin@datadiet.local` may request `platform_admin: true`; unlisted
+  `SYNTH-attacker@datadiet.local` receives 403.
+- The production bundle's JavaScript contains
+  `https://datadiet-demo-api.onrender.com` and no `trycloudflare` string. A
+  fresh hosted browser session loaded `/signin`, called `/auth/config` and
+  `/auth/me` on the Render origin, and made no tunnel or localhost request.
+
+The Cloudflare quick tunnel is no longer used by the hosted app. It was left
+running only as a fallback until the checks above passed; stop it before
+claiming the old path is gone. This cutover does not by itself satisfy the
+production-readiness work recorded in `docs/production-readiness.md`.
