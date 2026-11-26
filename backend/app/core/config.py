@@ -109,6 +109,11 @@ class Settings(BaseSettings):
         default_factory=frozenset
     )
 
+    # Time-boxed showcase prototype (ADR-0032). Off by default so ordinary
+    # builds keep ADR-0030's no-user-facing-sample-data rule. Only the hosted
+    # prototype sets this, and the UI carries its own matching VITE_ flag.
+    showcase_mode: bool = False
+
     # Phase 6.0: Clerk (RS256 + JWKS) identity provider --------------------
     # ``CLERK_ISSUER`` is the ``iss`` value Clerk writes into its session
     # tokens, i.e. the instance's frontend API origin, for example

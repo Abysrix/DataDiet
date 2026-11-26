@@ -48,7 +48,9 @@ def create_app() -> FastAPI:
         # (cookies) stay off. The method list must cover every verb the API
         # exposes, otherwise a cross-origin browser preflight rejects writes.
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        # HEAD is included so cross-origin monitors can probe /health without a
+        # preflight failure when they send an Origin or custom request headers.
+        allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
 

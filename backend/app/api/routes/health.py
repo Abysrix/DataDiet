@@ -37,6 +37,15 @@ def health() -> HealthResponse:
     )
 
 
+@router.head("", include_in_schema=False)
+def health_head() -> Response:
+    """Bodyless liveness probe for platform monitors that use HEAD.
+
+    It stays credential-free and never touches the database, exactly like GET.
+    """
+    return Response(status_code=status.HTTP_200_OK)
+
+
 @router.get(
     "/ready",
     response_model=ReadinessResponse,
