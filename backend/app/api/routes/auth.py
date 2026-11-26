@@ -87,6 +87,15 @@ def _unconfigured() -> HTTPException:
     )
 
 
+def _requests_elevation(data: DevLoginRequest) -> bool:
+    """Whether a sign-in asks for authority beyond a plain viewer account."""
+    return (
+        data.platform_admin
+        or data.institution_id is not None
+        or data.role != "viewer"
+    )
+
+
 @router.get("/config", response_model=AuthConfig, summary="How this deployment authenticates")
 def auth_config() -> AuthConfig:
     """Public on purpose: it exposes no secret and lets the UI tell the truth."""
@@ -177,12 +186,14 @@ def dev_login(data: DevLoginRequest, db: Session = Depends(get_db)) -> TokenResp
     request — there is no bypass — so development exercises the real
     authentication code rather than a parallel mechanism.
 
-    Two independent guards protect this. ``create_app`` does not register the
-    route at all in a protected environment, and this handler refuses before
-    touching the database even if the route somehow exists. In particular it
-    does not create an audit row whose actor/entity are attacker-controlled
-    input: a public unauthenticated request must not be able to write to the
-    audit log.
+    Three independent guards protect this. ``create_app`` does not register the
+    route at all in a protected environment; this handler refuses before touching
+    the database even if the route somehow exists; and elevated fields are
+    honoured only for synthetic emails named by ``AUTH_DEV_PRIVILEGED_EMAILS``.
+    An anonymous caller can therefore get a viewer token, but cannot mint
+    platform administration or institution membership by editing the request.
+    The audit row names the resolved local account and never trusts caller
+    assertions about authority.
     """
     require_auth_configured()
     settings = get_settings()
@@ -192,6 +203,18 @@ def dev_login(data: DevLoginRequest, db: Session = Depends(get_db)) -> TokenResp
         or settings.clerk_enabled
     ):
         raise _unconfigured()
+
+    if _requests_elevation(data) and (
+        "*" not in settings.auth_dev_privileged_emails
+        and data.email not in settings.auth_dev_privileged_emails
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "dev_login_elevation_not_allowed: this deployment only permits "
+                "viewer sign-in for this synthetic account"
+            ),
+        )
 
     if data.institution_id is not None and db.get(Institution, data.institution_id) is None:
         raise HTTPException(

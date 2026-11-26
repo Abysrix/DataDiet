@@ -22,6 +22,7 @@ import hashlib
 import hmac
 import json
 import time
+from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -481,6 +482,22 @@ def test_a_member_of_several_institutions_must_name_one(
     assert multi.get(f"{BASE}/assets?institution_id={b.id}").status_code == 200
 
 
+@pytest.fixture()
+def privileged_dev_allowlist(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run a test with a narrow allow-list instead of the test-suite wildcard.
+
+    The default ``client`` fixture signs in as a platform administrator, so that
+    email has to remain allow-listed for the fixture to work.
+    """
+    monkeypatch.setenv(
+        "AUTH_DEV_PRIVILEGED_EMAILS",
+        "platform.admin@datadiet.test,allowed.dev@datadiet.test",
+    )
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def test_dev_login_cannot_revoke_administration(client: TestClient, db: Session) -> None:
     """Development sign-in grants, never revokes — so it cannot be an escalation."""
     first = client.post(
@@ -499,6 +516,81 @@ def test_dev_login_cannot_revoke_administration(client: TestClient, db: Session)
         select(models.AppUser).where(models.AppUser.email == "admin.grant@datadiet.test")
     ).scalar_one()
     assert user.is_platform_admin is True
+
+
+def test_dev_login_refuses_platform_admin_for_unlisted_email(
+    privileged_dev_allowlist: None, client: TestClient, db: Session
+) -> None:
+    """A public caller cannot mint administration by editing the JSON body."""
+    response = client.post(
+        f"{BASE}/auth/dev-login",
+        json={"email": "attacker@datadiet.test", "platform_admin": True},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"].startswith("dev_login_elevation_not_allowed:")
+    user = db.execute(
+        select(models.AppUser).where(models.AppUser.email == "attacker@datadiet.test")
+    ).scalar_one_or_none()
+    assert user is None
+    assert (
+        db.execute(
+            select(models.AuditEvent).where(
+                models.AuditEvent.event_type == "auth.dev_login",
+                models.AuditEvent.actor == "attacker@datadiet.test",
+            )
+        ).scalar_one_or_none()
+        is None
+    )
+
+
+def test_dev_login_refuses_institution_role_for_unlisted_email(
+    privileged_dev_allowlist: None, client: TestClient, db: Session
+) -> None:
+    """Membership and elevated roles are privileged fields too."""
+    institution = models.Institution(code="AUTH10", name="Auth Ten")
+    db.add(institution)
+    db.commit()
+    db.refresh(institution)
+    response = client.post(
+        f"{BASE}/auth/dev-login",
+        json={
+            "email": "scope.attacker@datadiet.test",
+            "institution_id": institution.id,
+            "role": "admin",
+        },
+    )
+    assert response.status_code == 403
+    user = db.execute(
+        select(models.AppUser).where(
+            models.AppUser.email == "scope.attacker@datadiet.test"
+        )
+    ).scalar_one_or_none()
+    assert user is None
+
+
+def test_dev_login_honours_elevation_for_allowlisted_email(
+    privileged_dev_allowlist: None, client: TestClient, db: Session
+) -> None:
+    """The documented demo administrator still gets a working sign-in path."""
+    institution = models.Institution(code="AUTH11", name="Auth Eleven")
+    db.add(institution)
+    db.commit()
+    db.refresh(institution)
+    response = client.post(
+        f"{BASE}/auth/dev-login",
+        json={
+            "email": "ALLOWED.DEV@datadiet.test",
+            "institution_id": institution.id,
+            "role": "admin",
+            "platform_admin": True,
+        },
+    )
+    assert response.status_code == 200
+    profile = response.json()["user"]
+    assert profile["email"] == "allowed.dev@datadiet.test"
+    assert profile["is_platform_admin"] is True
+    assert profile["institutions"] == [institution.id]
+    assert profile["role"] == "admin"
 
 
 def test_dev_login_is_audited(client: TestClient, db: Session) -> None:

@@ -104,6 +104,15 @@ class Settings(BaseSettings):
     # protected-environment authentication.
     auth_dev_provider_enabled: bool = True
 
+    # A public development provider must not let an anonymous caller mint a
+    # platform-admin or institution-admin token. Elevated dev-login fields
+    # (platform_admin, institution_id, and any role above viewer) are honoured
+    # only for these exact synthetic email addresses. Empty means viewer-only;
+    # the wildcard is permitted only in ENVIRONMENT=test for legacy fixtures.
+    auth_dev_privileged_emails: Annotated[frozenset[str], NoDecode] = Field(
+        default_factory=frozenset
+    )
+
     # Phase 6.0: Clerk (RS256 + JWKS) identity provider --------------------
     # ``CLERK_ISSUER`` is the ``iss`` value Clerk writes into its session
     # tokens, i.e. the instance's frontend API origin, for example
@@ -142,6 +151,33 @@ class Settings(BaseSettings):
         if not self.clerk_issuer:
             return ""
         return f"{self.clerk_issuer.rstrip('/')}/.well-known/jwks.json"
+
+    @field_validator("auth_dev_privileged_emails", mode="before")
+    @classmethod
+    def _split_privileged_emails(cls, value: object) -> object:
+        """Accept a comma-separated list or JSON array of synthetic emails."""
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return frozenset()
+            if text.startswith("["):
+                try:
+                    parsed = json.loads(text)
+                except json.JSONDecodeError as cause:
+                    raise ValueError(
+                        "AUTH_DEV_PRIVILEGED_EMAILS looks like JSON but is not valid"
+                    ) from cause
+                if not isinstance(parsed, list) or not all(
+                    isinstance(item, str) for item in parsed
+                ):
+                    raise ValueError(
+                        "AUTH_DEV_PRIVILEGED_EMAILS as JSON must be an array of strings"
+                    )
+                return frozenset(item.strip().lower() for item in parsed if item.strip())
+            return frozenset(item.strip().lower() for item in text.split(",") if item.strip())
+        if isinstance(value, (list, tuple, set, frozenset)):
+            return frozenset(str(item).strip().lower() for item in value if str(item).strip())
+        return value
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -213,6 +249,18 @@ class Settings(BaseSettings):
           observable so a platform can tell a misconfigured service from a dead
           one.
         """
+        if "*" in self.auth_dev_privileged_emails and self.environment != "test":
+            raise ValueError(
+                "AUTH_DEV_PRIVILEGED_EMAILS=* is only permitted in ENVIRONMENT=test; "
+                "a deployed development provider must name exact synthetic accounts"
+            )
+        # The test suite predates the allow-list and signs in as several
+        # synthetic administrators. Tests are never public, so an unconfigured
+        # allow-list keeps that behaviour; a deployed development service always
+        # has to opt in explicitly.
+        if self.environment == "test" and not self.auth_dev_privileged_emails:
+            self.auth_dev_privileged_emails = frozenset({"*"})
+
         if not self.protected_environment:
             if not self.auth_jwt_secret:
                 self.auth_jwt_secret = DEV_AUTH_JWT_SECRET

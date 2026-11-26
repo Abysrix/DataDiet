@@ -434,3 +434,72 @@ institutional rows.
 Nothing here makes development sign-in valid in a protected environment, and
 nothing here uploads real personal data or claims an unimplemented
 integration.
+
+---
+
+## ADR-0028 — Move the demo API from a local tunnel to Render
+
+**Decision.** The stable demo backend is a Render Free Web Service in the
+Singapore region, built from the `render-demo` branch of `Abysrix/DataDiet`.
+The service uses `rootDir: backend`, `pip install -r requirements.txt`,
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, and health path
+`/api/v1/health`. `DATABASE_URL` and `AUTH_JWT_SECRET` are encrypted Render
+Environment Secrets; `ENVIRONMENT=development` keeps the synthetic dev-login
+route available while a real strong JWT secret signs tokens, and
+`CORS_ORIGINS=https://datadiet-demo.vercel.app` keeps the browser boundary
+exact. Azure SQL remains the only database. Render's shared outbound addresses
+are added to the Azure SQL firewall as narrow named rules; `0.0.0.0/0` remains
+forbidden. Vercel keeps the SPA and is rebuilt with
+`VITE_API_BASE_URL=https://<render-service>.onrender.com` only after the Render
+health, readiness, CORS, and dev-login checks pass.
+
+**Why.** The Cloudflare quick tunnel proved the browser contract but its URL
+changes on restart and depends on a loopback process on the operator's machine.
+Render provides a stable public HTTPS origin, a repeatable build from the exact
+committed source, and platform secret storage for the SQL connection and token
+signing key. Singapore reduces latency to the existing Azure SQL `southeastasia`
+database. The operator explicitly accepted the free plan's ~15-minute sleep and
+~1-minute wake-up, so the decision does not spend Azure credits or require a
+paid Render plan.
+
+**Consequences.** The repository source had to be pushed before Render could
+build it. The local `master` history is unrelated to the GitHub `main` history,
+so the demo was pushed as a separate `render-demo` branch rather than force-
+overwriting `main`. Migrations were already applied to Azure SQL before cutover
+because the free Render plan has no shell or one-off jobs. Until the live
+checks in `docs/render-azure-sql-demo.md` are completed, this ADR records a
+decision and runbook, not a verified deployment. Nothing here makes development
+sign-in valid in a protected environment or turns the demo into a production
+system.
+
+---
+
+## ADR-0029 — Allow-list privileged fields on the public dev-login
+
+**Decision.** The development sign-in route stays public for the hosted demo,
+but elevated request fields are no longer self-service. `platform_admin`,
+`institution_id`, and any role other than `viewer` are honoured only when the
+normalised request email appears in `AUTH_DEV_PRIVILEGED_EMAILS`, a comma-separated
+or JSON-array setting of exact synthetic addresses. An unlisted caller can still
+obtain a plain viewer token; an elevated request is refused with 403 before any
+account, membership, or audit row is written. The wildcard is permitted only in
+`ENVIRONMENT=test`, where the suite predates the setting, and is rejected at
+startup in any deployed environment. The Render demo allow-lists
+`SYNTH-demo@datadiet.local`, `SYNTH-admin@datadiet.local`, and
+`SYNTH-reviewer@datadiet.local`.
+
+**Why.** Moving the API to a public Render origin changed the threat model: CORS
+restrains browsers, not direct HTTP callers. The existing handler let any
+anonymous caller choose `platform_admin: true` and mint a platform-admin bearer
+token, or grant themselves an institution role. That was an unauthenticated
+privilege escalation and contradicted the repository's fail-closed authorization
+rules. The operator explicitly approved an exact synthetic allow-list as the
+smallest change that preserves the hosted sign-in demo.
+
+**Consequences.** `Settings` gains a documented environment variable in
+`.env.example`; `backend/tests/test_config_dev_privileged_emails.py` covers its
+parsing and the deployed-wildcard refusal; `backend/tests/test_auth.py` covers
+refusal before writes and the allow-listed success path. The instruction that
+named the admin email is now part of the runbook rather than a hidden UI trick.
+This is demo hardening, not production authentication: protected environments
+still do not register the route, and bearer tokens still live in client storage.
