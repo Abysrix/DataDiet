@@ -11,7 +11,7 @@ What the module proves, in order:
 1. the pre-existing MySQL history cannot be replayed from the beginning on
    PostgreSQL, which is *why* ``0013_postgresql_baseline`` exists;
 2. the documented entry path works: ``stamp 0012_audit_platform_admin_reset``
-   followed by ``upgrade head`` lands on ``0014_external_identities``;
+   followed by ``upgrade head`` lands on ``0015_mssql_baseline``;
 3. the resulting schema is what the ORM models describe (an Alembic
    autogenerate comparison reports no difference);
 4. ``0014`` reverses cleanly while ``0013`` is deliberately forward-only;
@@ -51,8 +51,10 @@ from sqlalchemy.orm import sessionmaker
 from app.db import models
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0014_external_identities"
+HEAD = "0015_mssql_baseline"
 BASELINE = "0013_postgresql_baseline"
+EXTERNAL_IDENTITIES = "0014_external_identities"
+MSSQL_BASELINE = "0015_mssql_baseline"
 STAMP_AT = "0012_audit_platform_admin_reset"
 FIRST_MYSQL_ONLY_STEP = "0002_add_institutions_and_asset_fields"
 
@@ -340,9 +342,18 @@ def test_the_identity_binding_round_trips_through_the_orm_on_postgres(pg_url: st
 
 
 def test_0014_reverses_and_0013_is_forward_only(pg_url: str) -> None:
-    """Rolling back the binding table is safe; rolling back the baseline is not."""
+    """0015 is a no-op here; 0014 reverses; 0013 refuses to be undone."""
     cfg = _alembic_config(pg_url)
     _install_baseline(cfg)
+
+    command.downgrade(cfg, MSSQL_BASELINE)
+    assert _stamped_version(pg_url) == MSSQL_BASELINE
+    assert "external_identities" in _tables(pg_url)
+
+    command.downgrade(cfg, EXTERNAL_IDENTITIES)
+    assert _stamped_version(pg_url) == EXTERNAL_IDENTITIES
+    assert "external_identities" in _tables(pg_url)
+    assert len(_tables(pg_url) - {"alembic_version"}) == 21
 
     command.downgrade(cfg, BASELINE)
     assert _stamped_version(pg_url) == BASELINE
@@ -391,6 +402,32 @@ def test_0013_does_nothing_unless_the_dialect_is_postgresql() -> None:
     assert calls == []
 
 
+def test_0015_does_nothing_unless_the_dialect_is_mssql() -> None:
+    """The SQL Server baseline must not issue DDL on PostgreSQL or MySQL."""
+    module = _load_revision_module(MSSQL_BASELINE)
+    calls: list[str] = []
+
+    class RecordingOp:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def __getattr__(self, name: str):
+            def record(*_args, **_kwargs):
+                calls.append(name)
+
+            return record
+
+    module.op = RecordingOp()
+    module.upgrade()
+
+    assert module._is_mssql() is False
+    assert calls == [], f"the baseline issued PostgreSQL operations: {calls}"
+
+    module.op = RecordingOp()
+    module.downgrade()  # documented no-op on a non-SQL-Server target
+    assert calls == []
+
+
 def test_the_preflight_reads_a_real_postgresql_target(pg_url: str) -> None:
     """The operator gate classifies the real database, not an injected reader."""
     preflight_module = importlib.util.spec_from_file_location(
@@ -413,6 +450,7 @@ def test_the_preflight_reads_a_real_postgresql_target(pg_url: str) -> None:
     command.stamp(cfg, STAMP_AT)
     fresh = preflight.assess(pg_url)
     assert fresh.dialect == "postgresql"
-    assert fresh.pending == (BASELINE, HEAD)
+    assert fresh.pending == (BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE)
     assert fresh.needs_postgres_baseline is True
+    assert fresh.needs_mssql_baseline is False
     assert fresh.includes_admin_reset is False

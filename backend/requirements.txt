@@ -12,6 +12,10 @@ PyMySQL>=1.1
 # suffix in DATABASE_URL selects this package; a bare `postgresql://` URL would
 # make SQLAlchemy import psycopg3 instead, which is not installed.
 psycopg2-binary>=2.9
+# Azure SQL Database target (ADR-0026). pymssql is a pure client library: unlike
+# pyodbc it needs no system ODBC driver, so the locally run backend can reach
+# Azure SQL with mssql+pymssql:// URLs without installing an ODBC stack.
+pymssql>=2.4
 # Clerk session-token verification (RS256 + JWKS). The `crypto` extra pulls
 # cryptography, which PyJWT needs to build RSA public keys from JWK material —
 # without it, `jwt.algorithms.RSAAlgorithm.from_jwk` is unavailable and every

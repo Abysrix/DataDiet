@@ -22,6 +22,12 @@ existing schema) and on PostgreSQL (where ``0013`` established the baseline). It
 is the pattern later revisions follow: new work is portable, only the historical
 divergence is branched.
 
+The one exception is SQL Server. ``0015_mssql_baseline`` runs *after* this
+revision in the graph but creates ``app_users``; on a fresh SQL Server the
+foreign key here would therefore reference a table that does not exist. This
+revision is a no-op on ``mssql`` and the baseline creates the equivalent table
+there instead. MySQL/PostgreSQL behaviour is unchanged.
+
 Downgrade drops the table. That removes identity bindings, which signs those
 subjects out (they become unknown identities again); it does not delete any
 ``app_users`` row, any membership, or any content. On PostgreSQL the drop is the
@@ -42,7 +48,15 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _is_mssql() -> bool:
+    return op.get_bind().dialect.name == "mssql"
+
+
 def upgrade() -> None:
+    if _is_mssql():
+        # The SQL Server baseline (0015) owns this table: it runs later in the
+        # graph but must create app_users first.
+        return
     op.create_table(
         "external_identities",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -69,5 +83,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if _is_mssql():
+        return  # 0015 owns this table and refuses to be reversed.
     op.drop_index("ix_external_identities_app_user", table_name="external_identities")
     op.drop_table("external_identities")

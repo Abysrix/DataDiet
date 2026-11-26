@@ -1,10 +1,10 @@
 """Tests for the read-only migration preflight (Phase 8, ADR-0018).
 
 The preflight only reads ``alembic_version`` and the local migration scripts.
-Deployment targets are MySQL or PostgreSQL (ADR-0025), so these tests inject a
-small read-only SQLite-backed revision reader for the classification cases and
-use a real subprocess only to prove that an unsupported URL is rejected. Nothing
-here applies a migration.
+Deployment targets are MySQL, PostgreSQL (ADR-0025) and SQL Server (ADR-0026),
+so these tests inject a small read-only SQLite-backed revision reader for the
+classification cases and use a real subprocess only to prove that an unsupported
+URL is rejected. Nothing here applies a migration.
 """
 
 from __future__ import annotations
@@ -21,14 +21,20 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "migration_preflight.py"
-HEAD = "0014_external_identities"
+HEAD = "0015_mssql_baseline"
 BASELINE = "0013_postgresql_baseline"
+MSSQL_BASELINE = "0015_mssql_baseline"
+EXTERNAL_IDENTITIES = "0014_external_identities"
 AUDIT = "0012_audit_platform_admin_reset"
 RESET = "0011_platform_admin_default_false"
 BEFORE_RESET = "0010_classification_downgrade_safety"
 FAKE_MYSQL = "mysql+pymysql://preflight:not-a-secret@127.0.0.1:3306/datadiet_preflight"
 FAKE_POSTGRES = (
     "postgresql+psycopg2://preflight:not-a-secret@127.0.0.1:5432/datadiet_preflight"
+)
+FAKE_MSSQL = (
+    "mssql+pymssql://preflight:not-a-secret@127.0.0.1:1433/datadiet_preflight"
+    "?encrypt=true&trust_server_certificate=false"
 )
 
 
@@ -126,6 +132,14 @@ def test_masked_target_hides_credentials_and_query_parameters(preflight) -> None
     assert "ssl_key" not in masked
 
 
+def test_masked_target_hides_sql_server_tls_parameters(preflight) -> None:
+    masked = preflight.masked_target(FAKE_MSSQL)
+
+    assert masked == "mssql+pymssql://127.0.0.1:1433/datadiet_preflight"
+    assert "not-a-secret" not in masked
+    assert "trust_server_certificate" not in masked
+
+
 def test_at_head_has_nothing_pending(preflight, tmp_path) -> None:
     result = _assess_with_sqlite(preflight, tmp_path, [HEAD])
 
@@ -139,7 +153,13 @@ def test_pending_0011_is_flagged(preflight, tmp_path) -> None:
     result = _assess_with_sqlite(preflight, tmp_path, [BEFORE_RESET])
 
     assert result.current_revision == BEFORE_RESET
-    assert result.pending == (RESET, AUDIT, BASELINE, HEAD)
+    assert result.pending == (
+        RESET,
+        AUDIT,
+        BASELINE,
+        EXTERNAL_IDENTITIES,
+        MSSQL_BASELINE,
+    )
     assert result.includes_admin_reset is True
 
 
@@ -193,6 +213,7 @@ def test_sqlite_target_is_rejected(preflight, tmp_path) -> None:
     assert "unsupported database dialect 'sqlite'" in str(failure.value)
     assert "mysql" in str(failure.value)
     assert "postgresql" in str(failure.value)
+    assert "mssql" in str(failure.value)
 
 
 def test_postgresql_target_is_supported(preflight) -> None:
@@ -202,6 +223,7 @@ def test_postgresql_target_is_supported(preflight) -> None:
     assert result.current_revision == HEAD
     assert result.pending == ()
     assert result.needs_postgres_baseline is False
+    assert result.needs_mssql_baseline is False
 
 
 def test_postgresql_stamped_at_0012_reports_the_baseline_as_pending(preflight) -> None:
@@ -209,8 +231,9 @@ def test_postgresql_stamped_at_0012_reports_the_baseline_as_pending(preflight) -
     result = _assess_at(preflight, FAKE_POSTGRES, AUDIT)
 
     assert result.dialect == "postgresql"
-    assert result.pending == (BASELINE, HEAD)
+    assert result.pending == (BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE)
     assert result.needs_postgres_baseline is True
+    assert result.needs_mssql_baseline is False
     assert result.includes_admin_reset is False
 
 
@@ -220,6 +243,34 @@ def test_the_postgres_baseline_warning_is_dialect_specific(preflight) -> None:
 
     assert result.dialect == "mysql"
     assert BASELINE in result.pending
+    assert result.needs_postgres_baseline is False
+    assert result.needs_mssql_baseline is False
+
+
+def test_mssql_target_is_supported(preflight) -> None:
+    result = _assess_at(preflight, FAKE_MSSQL, HEAD)
+
+    assert result.dialect == "mssql"
+    assert result.current_revision == HEAD
+    assert result.pending == ()
+    assert result.needs_mssql_baseline is False
+
+
+def test_mssql_stamped_at_0014_reports_the_baseline_as_pending(preflight) -> None:
+    """``0014`` is a no-op here; ``0015`` is the first SQL Server-only step."""
+    result = _assess_at(preflight, FAKE_MSSQL, EXTERNAL_IDENTITIES)
+
+    assert result.dialect == "mssql"
+    assert result.pending == (MSSQL_BASELINE,)
+    assert result.needs_mssql_baseline is True
+    assert result.includes_admin_reset is False
+
+
+def test_mssql_stamped_at_0012_reports_the_entry_path(preflight) -> None:
+    result = _assess_at(preflight, FAKE_MSSQL, AUDIT)
+
+    assert result.pending == (BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE)
+    assert result.needs_mssql_baseline is True
     assert result.needs_postgres_baseline is False
 
 
@@ -289,7 +340,7 @@ def test_cli_reports_pending_0011_and_exits_zero(preflight, monkeypatch, capsys)
         lambda _url: preflight.PreflightResult(
             current_revision=BEFORE_RESET,
             head_revision=HEAD,
-            pending=(RESET, AUDIT, BASELINE, HEAD),
+            pending=(RESET, AUDIT, BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE),
             dialect="mysql",
         ),
     )
@@ -317,7 +368,7 @@ def test_cli_shows_the_postgres_entry_path_and_not_the_reset_warning(
         lambda _url: preflight.PreflightResult(
             current_revision=AUDIT,
             head_revision=HEAD,
-            pending=(BASELINE, HEAD),
+            pending=(BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE),
             dialect="postgresql",
         ),
     )
@@ -328,6 +379,35 @@ def test_cli_shows_the_postgres_entry_path_and_not_the_reset_warning(
     assert "alembic stamp 0012_audit_platform_admin_reset" in output
     assert "alembic upgrade head" in output
     assert "Never upgrade from 0001" in output
+    assert "WARNING" not in output
+
+
+def test_cli_shows_the_sql_server_entry_path_and_not_the_reset_warning(
+    preflight, monkeypatch, capsys
+) -> None:
+    monkeypatch.setattr(
+        preflight,
+        "get_settings",
+        lambda: SimpleNamespace(environment="test", database_url=FAKE_MSSQL),
+    )
+    monkeypatch.setattr(
+        preflight,
+        "assess",
+        lambda _url: preflight.PreflightResult(
+            current_revision=AUDIT,
+            head_revision=HEAD,
+            pending=(BASELINE, EXTERNAL_IDENTITIES, MSSQL_BASELINE),
+            dialect="mssql",
+        ),
+    )
+
+    assert preflight.main() == 0
+    output = capsys.readouterr().out
+    assert "mssql" in output
+    assert "0015_mssql_baseline is still" in output
+    assert "alembic stamp 0012_audit_platform_admin_reset" in output
+    assert "alembic upgrade head" in output
+    assert "Never upgrade from 0001 on SQL Server" in output
     assert "WARNING" not in output
 
 

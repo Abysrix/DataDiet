@@ -131,7 +131,7 @@ def test_upgrade_head_reaches_latest(fresh_db: None) -> None:
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0014_external_identities"
+        assert version == "0015_mssql_baseline"
 
         insp = inspect(engine)
         tables = set(insp.get_table_names())
@@ -201,7 +201,7 @@ def test_phase7_platform_admin_default_is_safe(fresh_db: None) -> None:
             ).scalar_one()
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         assert privileged == 0
-        assert version == "0014_external_identities"
+        assert version == "0015_mssql_baseline"
 
         # The database-level default must also be FALSE for future raw inserts.
         with engine.begin() as conn:
@@ -262,7 +262,7 @@ def test_0012_records_the_reset_without_changing_access(fresh_db: None) -> None:
                     "'users.platform_admin_reset_recorded'"
                 )
             ).scalar_one()
-        assert version == "0014_external_identities"
+        assert version == "0015_mssql_baseline"
         assert privileged in (1, True), "0012 must not revoke a post-0011 grant"
         assert event_count == 1
         assert int(recorded_count) == 1
@@ -301,17 +301,19 @@ def test_preflight_reports_pending_0011_then_head(fresh_db: None) -> None:
         "0012_audit_platform_admin_reset",
         "0013_postgresql_baseline",
         "0014_external_identities",
+        "0015_mssql_baseline",
     )
     assert pending.includes_admin_reset is True
     assert pending.dialect == "mysql"
-    # 0013 is listed as pending on MySQL too, but it is a no-op there; the
-    # fresh-database entry path must not be suggested for a MySQL target.
+    # 0013 and 0015 are listed as pending on MySQL too, but each is a no-op
+    # there; a fresh-database entry path must not be suggested for MySQL.
     assert pending.needs_postgres_baseline is False
+    assert pending.needs_mssql_baseline is False
 
     command.upgrade(cfg, "head")
     applied = preflight.assess(MIGRATION_DB_URL)
 
-    assert applied.current_revision == "0014_external_identities"
+    assert applied.current_revision == "0015_mssql_baseline"
     assert applied.pending == ()
     assert applied.includes_admin_reset is False
 
@@ -530,7 +532,7 @@ def test_rollback_below_the_boundary_fails_as_documented(fresh_db: None) -> None
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0014_external_identities"
+        assert version == "0015_mssql_baseline"
         assert _schema_snapshot(engine) == before, (
             "the failed rollback must not leave the schema altered in any way"
         )

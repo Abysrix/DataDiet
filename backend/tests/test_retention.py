@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db import models, session
+from app.services import retention as retention_service
 
 
 @pytest.fixture()
@@ -245,6 +246,33 @@ def test_assessment_history_preserved_per_reassessment(
     # Most recent first; the earlier assessment had no hold.
     assert hist[0]["recommendation"] == "BLOCKED_BY_HOLD"
     assert hist[1]["recommendation"] == "RETAIN"
+
+
+def test_assessment_history_ties_are_newest_first(
+    client: TestClient, test_db: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Equal timestamps must not let an older assessment lead the history.
+
+    Windows clock ticks are coarse enough that two rapid reassessments can share
+    an ``assessed_at``. The id tie-break makes the documented newest-first order
+    deterministic instead of depending on the database's row scan order.
+    """
+    fixed_now = datetime(2026, 1, 1, tzinfo=UTC)
+    monkeypatch.setattr(retention_service, "_now", lambda: fixed_now)
+    aid = _make_asset(test_db, external_id="hist-tie", category="hr")
+    _activate_policy(client, name="P-tie", categories=["hr"], period_days=90)
+
+    assert client.post(f"/api/v1/retention/assess/{aid}").status_code == 200
+    hold = client.post("/api/v1/retention/holds", json={"name": "H-tie", "asset_id": aid})
+    assert hold.status_code == 201, hold.text
+    assert client.post(f"/api/v1/retention/assess/{aid}").status_code == 200
+
+    hist = client.get(f"/api/v1/retention/assessments/{aid}/history").json()
+    assert len(hist) == 2
+    assert [item["id"] for item in hist] == sorted(
+        (item["id"] for item in hist), reverse=True
+    )
+    assert [item["holds_active"] for item in hist] == [1, 0]
 
 
 def test_decision_recorded_and_listed(client: TestClient, test_db: sessionmaker) -> None:

@@ -47,8 +47,9 @@ production backup has been configured or verified.
 - Live migration suite: 19/19 passed against a disposable MySQL 8.0.46
   instance on 2026-10-21, including the `0011` preflight/reset and the
   `0012` audit-record/idempotency test. Phase 6.0 updated 16 lines of that
-  suite's expectations (head is now `0014_external_identities`, and
-  `0013_postgresql_baseline` is expected as a *pending no-op* on MySQL) but the
+  suite's expectations (head is now `0015_mssql_baseline`, and
+  `0013_postgresql_baseline` / `0015_mssql_baseline` are expected as *pending
+  no-ops* on MySQL) but the
   suite was **not re-run**: no MySQL server and no Docker exist in this
   environment, so it skipped 19/19 (exit 0) and the first real execution of the
   edited expectations will be the CI `mysql:8.4` job — which has itself never
@@ -499,7 +500,11 @@ This is a sequence, not a risk score:
    `0014_external_identities`: the rehearsal must cover the PostgreSQL entry
    path (`stamp 0012` → `upgrade head`), the MySQL no-op path for `0013`, and a
    Clerk identity bind/unbind, none of which has been rehearsed on a durable
-   database.)*
+   database.)* ADR-0026 adds the Azure SQL path through `0015_mssql_baseline`. It
+was applied once to the demo database on 2026-11-26 with a firewall rule limited
+to one operator public IP; no broad `0.0.0.0/0` rule was created. That is a live
+rehearsal of the migration path, not a restore drill or a production-ready
+database.*
 8. Make CI green and required, complete a reproducible Python lockfile and
    dependency/secret scanning, and add the production image/deployment
    artifact.

@@ -148,12 +148,39 @@ describe("SignIn", () => {
     expect(screen.getByText(/not production authentication/i)).toBeInTheDocument();
   });
 
+  it("keeps optional operator fields behind an explicit disclosure", async () => {
+    renderSignIn();
+
+    expect(await screen.findByText(/development sign-in/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/display name/i)).not.toBeVisible();
+    expect(screen.getByLabelText(/institution id/i)).not.toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+
+    expect(screen.getByLabelText(/display name/i)).toBeVisible();
+    expect(screen.getByLabelText(/institution id/i)).toBeVisible();
+  });
+
+  it("reveals the token path from a link instead of a second card", async () => {
+    renderSignIn();
+
+    expect(await screen.findByLabelText(/^email/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /use a bearer token instead/i }));
+
+    expect(await screen.findByLabelText(/bearer token/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^email/i)).not.toBeInTheDocument();
+  });
+
   it("signs in with the form values", async () => {
     devLogin.mockResolvedValue({ access_token: "t", token_type: "bearer", expires_in: 900 });
     fetchMe.mockResolvedValue(testUser({ email: "new@example.org" }));
     renderSignIn();
 
-    await userEvent.type(await screen.findByLabelText(/^email/i), "new@example.org");
+    const email = await screen.findByLabelText(/^email/i);
+    await userEvent.clear(email);
+    await userEvent.type(email, "new@example.org");
     await userEvent.selectOptions(screen.getByLabelText(/^role/i), "admin");
     await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 

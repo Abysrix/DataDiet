@@ -19,22 +19,31 @@
  *                         503 until an operator configures the signing
  *                         secret. There is nothing to sign in with.
  *
- * DataDiet stores no passwords at all: the backend keeps a directory of
- * accounts, and identity is proven by a signed bearer token.
+ * ADR-0027 simplifies the development path to one card: two primary fields,
+ * optional operator controls behind an explicit disclosure, and the pasted-token
+ * route behind a link. DataDiet stores no passwords at all — identity is proven
+ * by a signed bearer token that the server verifies on every request.
  */
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { fetchAuthConfig } from "../api/auth";
-import type { DevLoginRequest, RoleValue } from "../api/types";
+import type { AuthConfig, DevLoginRequest, RoleValue } from "../api/types";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { ClerkSignInForm } from "../auth/ClerkBoundary";
 import { useExternalSessionSnapshot } from "../auth/externalSession";
 import type { ExternalSessionSnapshot } from "../auth/externalSession";
 import { useAuth } from "../auth/AuthContext";
 import { toErrorMessage } from "../api/client";
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { ErrorState } from "../components/ui/ErrorState";
+import { Field } from "../components/ui/Field";
+import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
 import { Spinner } from "../components/ui/Spinner";
+import { Textarea } from "../components/ui/Textarea";
+import { IconChevronDown, IconChevronUp } from "../components/icons";
 
 const ROLE_OPTIONS: Array<{ value: RoleValue; label: string }> = [
   { value: "viewer", label: "Viewer — read-only" },
@@ -42,80 +51,366 @@ const ROLE_OPTIONS: Array<{ value: RoleValue; label: string }> = [
   { value: "admin", label: "Admin — manage policies, sources, and assets" },
 ];
 
+/** The `SYNTH-` prefix keeps the default account unmistakably non-production. */
+const DEFAULT_EMAIL = "SYNTH-demo@datadiet.local";
+
 export default function SignIn() {
   const { data: config, loading, error, refetch } = useApiQuery(fetchAuthConfig, []);
   const { sessionExpired, anonymousReason, signOut } = useAuth();
   const external = useExternalSessionSnapshot();
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center bg-slate-950 px-4 py-10">
-      <div className="w-full max-w-lg">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+    <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10 text-ink">
+      <div className="w-full max-w-md">
+        <div className="mb-6 text-center">
+          <span
+            aria-hidden="true"
+            className="mx-auto flex h-11 w-11 items-center justify-center rounded-card bg-accent text-body font-bold text-on-accent shadow-card"
+          >
             DD
           </span>
-          <div>
-            <h1 className="text-lg font-semibold text-white">DataDiet</h1>
-            <p className="text-xs text-slate-400">Data lifecycle &amp; privacy management</p>
-          </div>
+          <p className="mt-3 text-eyebrow font-semibold uppercase tracking-[0.12em] text-ink-muted">
+            DataDiet
+          </p>
+          <h1 className="mt-1 text-display font-semibold text-ink">Sign in to continue</h1>
+          <p className="mt-1 text-supporting text-ink-muted">Data lifecycle &amp; privacy management</p>
         </div>
 
-        {sessionExpired ? (
-          <div
-            role="status"
-            className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
-          >
-            Your session has ended because the server no longer accepts your token. Sign in again
-            to continue.
-          </div>
-        ) : null}
-
-        {loading ? (
-          <div className="rounded-xl bg-slate-900 p-8">
-            <Spinner label="Loading sign-in options..." />
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="rounded-xl bg-slate-900 p-2">
-            <ErrorState
-              title="Sign-in configuration unavailable"
-              message={error}
-              onRetry={refetch}
-            />
-          </div>
-        ) : null}
-
-        {config !== null && !loading ? (
-          config.authentication === "unconfigured" ? (
-            <UnconfiguredPanel description={config.description} />
-          ) : config.authentication === "clerk" ? (
-            <ClerkPanel
-              externalState={external.state}
-              reason={anonymousReason}
-              description={config.description}
-              onEndSession={signOut}
-            />
-          ) : (
-            <div className="space-y-4">
-              {config.authentication === "development" ? (
-                <DevSignInCard devLoginEnabled={config.dev_login_enabled} />
-              ) : (
-                <BearerBoundaryPanel description={config.description} />
-              )}
-              {/* In the bearer boundary this is the only way in; in development it
-                  is the honest alternative to the synthetic account. */}
-              <PastedTokenCard />
-              <ConfigFootnote
-                issuer={config.issuer}
-                audience={config.audience}
-                ttlSeconds={config.token_ttl_seconds}
+        <Card className="shadow-raised">
+          {sessionExpired ? <SessionExpiredNotice /> : null}
+          {loading ? (
+            <CardBody>
+              <Spinner label="Checking sign-in options..." />
+            </CardBody>
+          ) : null}
+          {error ? (
+            <CardBody>
+              <ErrorState title="Sign-in configuration unavailable" message={error} onRetry={refetch} />
+            </CardBody>
+          ) : null}
+          {config !== null && !loading ? (
+            config.authentication === "unconfigured" ? (
+              <UnconfiguredPanel description={config.description} />
+            ) : config.authentication === "clerk" ? (
+              <ClerkPanel
+                externalState={external.state}
+                reason={anonymousReason}
+                description={config.description}
+                onEndSession={signOut}
               />
-            </div>
-          )
-        ) : null}
+            ) : (
+              <LocalAuthPanel config={config} />
+            )
+          ) : null}
+        </Card>
+
+        <p className="mt-4 text-center text-meta text-ink-muted">
+          No passwords stored. Every request is verified by the DataDiet API.
+        </p>
       </div>
+    </main>
+  );
+}
+
+function SessionExpiredNotice() {
+  return (
+    <div
+      role="status"
+      className="border-b border-warning-line bg-warning-surface px-card-x py-card-y text-supporting text-warning-ink"
+    >
+      Your session has ended because the server no longer accepts your token. Sign in again to
+      continue.
     </div>
+  );
+}
+
+/* --------------------------- local auth modes ------------------------------ */
+
+/**
+ * Development shows the short synthetic form first. The token route is a link,
+ * not a second card competing for attention; in bearer-boundary mode it is the
+ * only route, so it is shown immediately.
+ */
+function LocalAuthPanel({ config }: { config: AuthConfig }) {
+  const isDevelopment = config.authentication === "development";
+  const [showToken, setShowToken] = useState(!isDevelopment);
+
+  if (isDevelopment && !showToken) {
+    return (
+      <DevSignInCard
+        devLoginEnabled={config.dev_login_enabled}
+        onUseToken={() => setShowToken(true)}
+      />
+    );
+  }
+
+  return (
+    <PastedTokenCard
+      title={isDevelopment ? "Use an existing token" : "Sign in with your organization's token"}
+      description={
+        isDevelopment
+          ? "Paste a bearer token issued for this deployment. The server verifies it before granting access."
+          : config.description
+      }
+      onBack={isDevelopment ? () => setShowToken(false) : undefined}
+    />
+  );
+}
+
+function DevSignInCard({
+  devLoginEnabled,
+  onUseToken,
+}: {
+  devLoginEnabled: boolean;
+  onUseToken: () => void;
+}) {
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState(DEFAULT_EMAIL);
+  const [displayName, setDisplayName] = useState("");
+  const [institutionId, setInstitutionId] = useState("");
+  const [role, setRole] = useState<RoleValue>("viewer");
+  const [platformAdmin, setPlatformAdmin] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; institution?: string }>({});
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const trimmedEmail = email.trim();
+    const nextErrors: { email?: string; institution?: string } = {};
+
+    if (!trimmedEmail.includes("@")) {
+      nextErrors.email = "Enter an email address for the synthetic account.";
+    }
+    let parsedInstitution: number | undefined;
+    if (institutionId.trim()) {
+      parsedInstitution = Number(institutionId);
+      if (!Number.isInteger(parsedInstitution) || parsedInstitution <= 0) {
+        nextErrors.institution = "The institution id must be a positive integer.";
+      }
+    }
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setError(null);
+    setSubmitting(true);
+    try {
+      const request: DevLoginRequest = { email: trimmedEmail, role };
+      if (displayName.trim()) request.display_name = displayName.trim();
+      if (parsedInstitution !== undefined) request.institution_id = parsedInstitution;
+      if (platformAdmin) request.platform_admin = true;
+      await signIn(request);
+      // On success the auth context flips to authenticated and the router
+      // moves away from the sign-in screen.
+    } catch (cause) {
+      setError(toErrorMessage(cause));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <CardHeader
+        title="Development sign-in"
+        description="Sign in with a synthetic account. Development only — not production authentication."
+        action={<Badge tone="warning">Demo only</Badge>}
+      />
+      <CardBody>
+        {!devLoginEnabled ? (
+          <p role="alert" className="mb-4 text-supporting text-critical-ink">
+            The development sign-in provider is disabled on this server.
+          </p>
+        ) : null}
+        {error ? (
+          <div
+            role="alert"
+            className="mb-4 rounded-control border border-critical-line bg-critical-surface px-3 py-2 text-supporting text-critical-ink"
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <form onSubmit={submit} className="space-y-4" noValidate>
+          <Field
+            label="Email"
+            hint="A synthetic account is created or reused."
+            error={fieldErrors.email}
+            required
+          >
+            {(control) => (
+              <Input
+                {...control}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="SYNTH-reviewer@datadiet.local"
+                autoComplete="off"
+              />
+            )}
+          </Field>
+
+          <Field label="Role" hint="Permissions are always verified server-side.">
+            {(control) => (
+              <Select
+                {...control}
+                value={role}
+                onChange={(event) => setRole(event.target.value as RoleValue)}
+              >
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <div className="space-y-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAdvanced((current) => !current)}
+              aria-expanded={showAdvanced}
+              aria-controls="dev-advanced-options"
+            >
+              {showAdvanced ? (
+                <IconChevronUp className="h-4 w-4" />
+              ) : (
+                <IconChevronDown className="h-4 w-4" />
+              )}
+              Advanced options
+            </Button>
+            <div
+              id="dev-advanced-options"
+              hidden={!showAdvanced}
+              className="space-y-4 rounded-card border border-line bg-surface-sunken p-4"
+            >
+              <Field label="Display name (optional)">
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="text"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="Synthetic Reviewer"
+                  />
+                )}
+              </Field>
+              <Field
+                label="Institution id (optional)"
+                hint="Only needed to grant institution-scoped access."
+                error={fieldErrors.institution}
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="number"
+                    min={1}
+                    value={institutionId}
+                    onChange={(event) => setInstitutionId(event.target.value)}
+                    placeholder="1"
+                  />
+                )}
+              </Field>
+              <label className="flex items-start gap-3 text-supporting text-ink-secondary">
+                <input
+                  type="checkbox"
+                  checked={platformAdmin}
+                  onChange={(event) => setPlatformAdmin(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded-control border-line-strong accent-accent"
+                />
+                <span>
+                  Platform administrator
+                  <span className="text-ink-muted"> — development only; cross-institution access</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <Button type="submit" fullWidth loading={submitting} disabled={!devLoginEnabled}>
+            Sign in
+          </Button>
+
+          <div className="text-center">
+            <Button type="button" variant="ghost" size="sm" onClick={onUseToken}>
+              Use a bearer token instead
+            </Button>
+          </div>
+        </form>
+      </CardBody>
+    </>
+  );
+}
+
+function PastedTokenCard({
+  title,
+  description,
+  onBack,
+}: {
+  title: string;
+  description: string;
+  onBack?: () => void;
+}) {
+  const { signInWithToken } = useAuth();
+  const [token, setToken] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signInWithToken(token);
+    } catch (cause) {
+      setError(toErrorMessage(cause));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <CardHeader title={title} description={description} />
+      <CardBody>
+        {error ? (
+          <div
+            role="alert"
+            className="mb-4 rounded-control border border-critical-line bg-critical-surface px-3 py-2 text-supporting text-critical-ink"
+          >
+            {error}
+          </div>
+        ) : null}
+        <form onSubmit={submit} className="space-y-4">
+          <Field
+            label="Bearer token"
+            hint="Paste a token issued for this deployment; nothing is stored on the server."
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                className="font-mono text-meta"
+                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                autoComplete="off"
+              />
+            )}
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" loading={submitting} disabled={token.trim().length === 0}>
+              Verify and sign in
+            </Button>
+            {onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                Back to demo sign-in
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </CardBody>
+    </>
   );
 }
 
@@ -144,321 +439,101 @@ function ClerkPanel({
     // publishable key: there is no sign-in flow to show, and pretending there is
     // one would be the fake integration this project forbids.
     return (
-      <Card>
+      <>
         <CardHeader
           title="Clerk sign-in is not configured in this build"
           description="This API verifies Clerk session tokens, but the frontend was built without a Clerk publishable key, so there is no sign-in form to render."
         />
         <CardBody>
-          <p className="text-sm text-slate-600">
-            Set <code className="font-mono text-xs">VITE_CLERK_PUBLISHABLE_KEY</code> and rebuild
-            the frontend. Clerk&apos;s secret key stays on the server and is never used by this
-            application — nothing secret belongs in the browser bundle.
+          <p className="text-supporting text-ink-muted">
+            Set <Code>VITE_CLERK_PUBLISHABLE_KEY</Code> and rebuild the frontend. Clerk&apos;s secret
+            key stays on the server and is never used by this application — nothing secret belongs
+            in the browser bundle.
           </p>
         </CardBody>
-      </Card>
+      </>
     );
   }
 
   if (externalState === "loading") {
     return (
-      <div className="rounded-xl bg-slate-900 p-8">
+      <CardBody>
         <Spinner label="Connecting to the identity provider..." />
-      </div>
+      </CardBody>
     );
   }
 
   if (externalState === "signed-out") {
     return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader title="Sign in with Clerk" description={description} />
-          <CardBody>
-            <p className="text-sm text-slate-600">
-              DataDiet stores no passwords and issues no tokens. An administrator links a Clerk
-              identity to a DataDiet account and grants its institution membership; until then the
-              server refuses the session and says why. There is no self-service account creation.
-            </p>
-          </CardBody>
-        </Card>
-        <ClerkSignInForm />
-        <p className="text-center text-xs text-slate-500">
-          Session tokens are minted and refreshed by Clerk. Every request is still verified
-          server-side, and this page never decides identity or permissions on its own.
-        </p>
-      </div>
+      <>
+        <CardHeader title="Sign in with Clerk" description={description} />
+        <CardBody>
+          <p className="text-supporting text-ink-muted">
+            DataDiet stores no passwords and issues no tokens. An administrator links a Clerk
+            identity to a DataDiet account and grants its institution membership; until then the
+            server refuses the session and says why. There is no self-service account creation.
+          </p>
+        </CardBody>
+        <CardBody className="border-t border-line">
+          <ClerkSignInForm />
+        </CardBody>
+        <CardBody className="border-t border-line">
+          <p className="text-center text-meta text-ink-muted">
+            Session tokens are minted and refreshed by Clerk. Every request is still verified
+            server-side, and this page never decides identity or permissions on its own.
+          </p>
+        </CardBody>
+      </>
     );
   }
 
   // Clerk has an active session that DataDiet refused: show the refusal, do not
   // loop the user back into a sign-in they have already completed.
   return (
-    <Card>
+    <>
       <CardHeader
         title="Clerk has you signed in; DataDiet has not granted a session"
         description="Your identity provider verified you, but this account is not linked, is deactivated, or the server could not reach it."
       />
       <CardBody className="space-y-4">
-        <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+        <p role="alert" className="rounded-control bg-critical-surface px-3 py-2 text-supporting text-critical-ink">
           {reason ?? "The server did not accept this session."}
         </p>
-        <p className="text-sm text-slate-600">
+        <p className="text-supporting text-ink-muted">
           Nothing was granted locally and nothing will appear until an administrator links your
           identity to a DataDiet account.
         </p>
-        <button
-          type="button"
-          onClick={onEndSession}
-          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
-        >
+        <Button variant="secondary" onClick={onEndSession}>
           End this session
-        </button>
+        </Button>
       </CardBody>
-    </Card>
+    </>
   );
 }
 
-/* ------------------------------ honest panels ----------------------------- */
-
 function UnconfiguredPanel({ description }: { description: string }) {
   return (
-    <Card>
+    <>
       <CardHeader
         title="Authentication is not configured"
         description="This deployment has no signing secret, so every protected API refuses requests (HTTP 503) instead of accepting unverified identity."
       />
-      <CardBody>
-        <p className="text-sm text-slate-600">{description}</p>
-        <p className="mt-3 text-sm text-slate-600">
-          An operator must set <code className="font-mono text-xs">AUTH_JWT_SECRET</code> (and
-          ideally issuer and audience) in the backend environment — see{" "}
-          <code className="font-mono text-xs">.env.example</code> — before anyone can sign in.
-          No default or placeholder credential is ever accepted in production.
+      <CardBody className="space-y-3 text-supporting text-ink-muted">
+        <p>{description}</p>
+        <p>
+          An operator must set <Code>AUTH_JWT_SECRET</Code> (and ideally issuer and audience) in the
+          backend environment — see <Code>.env.example</Code> — before anyone can sign in. No
+          default or placeholder credential is ever accepted in production.
         </p>
       </CardBody>
-    </Card>
+    </>
   );
 }
 
-function BearerBoundaryPanel({ description }: { description: string }) {
+function Code({ children }: { children: string }) {
   return (
-    <Card>
-      <CardHeader
-        title="Sign in with your organization's token"
-        description="This deployment verifies signed bearer tokens, but no identity provider or single sign-on redirect is configured."
-      />
-      <CardBody>
-        <p className="text-sm text-slate-600">{description}</p>
-      </CardBody>
-    </Card>
-  );
-}
-
-function ConfigFootnote({
-  issuer,
-  audience,
-  ttlSeconds,
-}: {
-  issuer: string;
-  audience: string;
-  ttlSeconds: number;
-}) {
-  return (
-    <p className="text-center text-xs text-slate-500">
-      Tokens are issued by <span className="font-mono">{issuer}</span> for{" "}
-      <span className="font-mono">{audience}</span> and expire after {ttlSeconds} seconds. Every
-      request is verified server-side; this page never decides identity on its own.
-    </p>
-  );
-}
-
-/* ------------------------------ dev sign-in ------------------------------- */
-
-function DevSignInCard({ devLoginEnabled }: { devLoginEnabled: boolean }) {
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [institutionId, setInstitutionId] = useState("");
-  const [role, setRole] = useState<RoleValue>("viewer");
-  const [platformAdmin, setPlatformAdmin] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: React.FormEvent): Promise<void> {
-    event.preventDefault();
-    setError(null);
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail.includes("@")) {
-      setError("Enter an email address for the synthetic account.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const request: DevLoginRequest = { email: trimmedEmail, role };
-      if (displayName.trim()) request.display_name = displayName.trim();
-      if (institutionId.trim()) {
-        const id = Number(institutionId);
-        if (!Number.isInteger(id) || id <= 0) {
-          setError("The institution id must be a positive integer.");
-          setSubmitting(false);
-          return;
-        }
-        request.institution_id = id;
-      }
-      if (platformAdmin) request.platform_admin = true;
-      await signIn(request);
-      // On success the auth context flips to authenticated and the router
-      // moves away from the sign-in screen.
-    } catch (cause) {
-      setError(toErrorMessage(cause));
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader
-        title="Development sign-in"
-        description="Creates or reuses a synthetic local account and signs in with a real, server-verified token. This provider is disabled in production — it is not production authentication."
-      />
-      <CardBody>
-        {!devLoginEnabled ? (
-          <p role="alert" className="mb-4 text-sm text-rose-400">
-            The development sign-in provider is disabled on this server.
-          </p>
-        ) : null}
-
-        {error ? (
-          <p role="alert" className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-            {error}
-          </p>
-        ) : null}
-
-        <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm sm:col-span-2">
-            <span className="font-medium text-slate-300">Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              placeholder="reviewer@example.org"
-              autoComplete="off"
-            />
-          </label>
-          <label className="block text-sm sm:col-span-2">
-            <span className="font-medium text-slate-300">Display name (optional)</span>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              placeholder="Synthetic Reviewer"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-300">Institution id (optional)</span>
-            <input
-              type="number"
-              min={1}
-              value={institutionId}
-              onChange={(e) => setInstitutionId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-300">Role</span>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as RoleValue)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-            >
-              {ROLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={platformAdmin}
-              onChange={(e) => setPlatformAdmin(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-600 bg-slate-900"
-            />
-            <span className="font-medium text-slate-300">
-              Platform administrator (development only; grants cross-institution access)
-            </span>
-          </label>
-          <div className="sm:col-span-2">
-            <button
-              type="submit"
-              disabled={submitting || !devLoginEnabled}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {submitting ? "Signing in..." : "Sign in"}
-            </button>
-          </div>
-        </form>
-      </CardBody>
-    </Card>
-  );
-}
-
-/* ---------------------------- pasted-token sign-in ------------------------ */
-
-function PastedTokenCard() {
-  const { signInWithToken } = useAuth();
-  const [token, setToken] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: React.FormEvent): Promise<void> {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await signInWithToken(token);
-    } catch (cause) {
-      setError(toErrorMessage(cause));
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader
-        title="Use an existing token"
-        description="Paste a bearer token issued for this deployment (for example by your organization's identity provider). The server verifies it before any access is granted."
-      />
-      <CardBody>
-        {error ? (
-          <p role="alert" className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-            {error}
-          </p>
-        ) : null}
-        <form onSubmit={submit} className="space-y-3">
-          <label className="block text-sm">
-            <span className="font-medium text-slate-300">Bearer token</span>
-            <textarea
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              rows={3}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-white focus:border-indigo-500 focus:outline-none"
-              placeholder="eyJhbGciOiJIUzI1NiIs..."
-              autoComplete="off"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={submitting || token.trim().length === 0}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 disabled:opacity-50"
-          >
-            {submitting ? "Verifying..." : "Verify token and sign in"}
-          </button>
-        </form>
-      </CardBody>
-    </Card>
+    <code className="rounded-control bg-surface-sunken px-1 py-0.5 font-mono text-meta text-ink-secondary">
+      {children}
+    </code>
   );
 }

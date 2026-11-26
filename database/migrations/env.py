@@ -18,9 +18,13 @@ from sqlalchemy import engine_from_config, pool
 _BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
+_MIGRATIONS_DIR = Path(__file__).resolve().parent
+if str(_MIGRATIONS_DIR) not in sys.path:
+    sys.path.insert(0, str(_MIGRATIONS_DIR))
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.models import Base  # noqa: E402
+from url_escape import escape_alembic_url  # noqa: E402
 
 config = context.config
 
@@ -31,7 +35,7 @@ if config.config_file_name is not None:
 # was already set explicitly (e.g. by a test harness that passes a disposable
 # database via ``Config.set_main_option``).
 if not config.get_main_option("sqlalchemy.url"):
-    config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    config.set_main_option("sqlalchemy.url", escape_alembic_url(get_settings().database_url))
 
 target_metadata = Base.metadata
 

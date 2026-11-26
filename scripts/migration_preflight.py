@@ -12,13 +12,14 @@ anything:
   ``0011_platform_admin_default_false`` -- the correction that resets
   ``is_platform_admin`` for every account (ADR-0017) -- or the forward audit
   record ``0012_audit_platform_admin_reset`` (ADR-0020).
-* whether the target is a supported dialect. MySQL and PostgreSQL are (ADR-0025);
-  SQLite and other dialects are rejected with exit code 6 rather than reported as
-  a valid migration target.
+* whether the target is a supported dialect. MySQL, PostgreSQL (ADR-0025) and
+  SQL Server are; SQLite and other dialects are rejected with exit code 6 rather
+  than reported as a valid migration target.
 
-On a PostgreSQL target that still has ``0013_postgresql_baseline`` pending, the
-report adds the entry path (``stamp 0012`` first, then ``upgrade head``), because
-the earlier revisions carry MySQL-only DDL and cannot be replayed there.
+On a PostgreSQL target that still has ``0013_postgresql_baseline`` pending, or a
+SQL Server target that still has ``0015_mssql_baseline`` pending, the report adds
+the entry path (``stamp 0012`` first, then ``upgrade head``), because the earlier
+revisions carry MySQL-only DDL and cannot be replayed there.
 
 The script never calls Alembic upgrade/downgrade and never writes SQL. A
 verified backup and a documented administrator recovery plan stay human gates;
@@ -38,8 +39,8 @@ Exit codes::
        ambiguous
     4  the stamped revision is not part of this repository's history
     5  repository history is ambiguous (multiple heads)
-    6  unsupported database dialect (only MySQL and PostgreSQL are valid
-       migration targets)
+    6  unsupported database dialect (only MySQL, PostgreSQL and SQL Server are
+       valid migration targets)
 """
 
 from __future__ import annotations
@@ -76,9 +77,17 @@ POSTGRES_BASELINE_REVISION = "0013_postgresql_baseline"
 #: schema the baseline reproduces.
 POSTGRES_BASELINE_PARENT = "0012_audit_platform_admin_reset"
 
+#: Revision that establishes the 0001..0012 schema on SQL Server. The portable
+#: ``0014_external_identities`` revision must run before it, so a fresh database
+#: enters the history at ``0012`` rather than replaying the MySQL-only steps.
+MSSQL_BASELINE_REVISION = "0015_mssql_baseline"
+
+#: Revision a fresh SQL Server database is stamped at before ``0015`` is applied.
+MSSQL_ENTRY_STAMP = "0012_audit_platform_admin_reset"
+
 #: Dialects the Alembic history is written and tested for. SQLite is a unit-test
 #: convenience, never a deployment target.
-SUPPORTED_BACKENDS = frozenset({"mysql", "postgresql"})
+SUPPORTED_BACKENDS = frozenset({"mysql", "postgresql", "mssql"})
 
 _DEFAULT_MIGRATIONS_DIR = _REPO_ROOT / "database" / "migrations"
 
@@ -98,7 +107,7 @@ class PreflightResult:
     current_revision: str
     head_revision: str
     pending: tuple[str, ...]
-    #: The target's SQLAlchemy backend name, e.g. ``mysql`` or ``postgresql``.
+    #: The target's SQLAlchemy backend name, e.g. ``mysql``, ``postgresql`` or ``mssql``.
     dialect: str = ""
 
     @property
@@ -114,6 +123,11 @@ class PreflightResult:
         is a no-op branch, so listing it as pending is not a warning there.
         """
         return self.dialect == "postgresql" and POSTGRES_BASELINE_REVISION in self.pending
+
+    @property
+    def needs_mssql_baseline(self) -> bool:
+        """Whether a SQL Server target still has the ``0015`` baseline to apply."""
+        return self.dialect == "mssql" and MSSQL_BASELINE_REVISION in self.pending
 
 
 def masked_target(database_url: str) -> str:
@@ -141,10 +155,10 @@ def _require_supported_dialect(database_url: str) -> str:
     """Return the target's backend name, or refuse a dialect with no tested history.
 
     MySQL is the dialect the original history was written for; PostgreSQL became
-    a supported target with ADR-0025, through the ``0013`` baseline branch. SQLite
-    and other engines are useful in unit tests, but accepting any dialect would
-    let the preflight report a clean result for a target the migrations were never
-    tested against.
+    a supported target with ADR-0025 through ``0013``, and SQL Server through the
+    ``0015`` baseline. SQLite and other engines are useful in unit tests, but
+    accepting any dialect would let the preflight report a clean result for a
+    target the migrations were never tested against.
     """
     try:
         url = make_url(database_url)
@@ -329,6 +343,14 @@ def main() -> int:
         print("database enters the history at the revision 0013 replaces: run")
         print(f"'alembic stamp {POSTGRES_BASELINE_PARENT}' then 'alembic upgrade head'.")
         print("Never upgrade from 0001 on PostgreSQL.")
+    if result.needs_mssql_baseline:
+        print()
+        print("NOTE: this is a SQL Server target and 0015_mssql_baseline is still")
+        print("pending, so revisions 0001-0012 have not been applied here. They carry")
+        print("MySQL-only DDL and cannot be replayed on SQL Server. A fresh SQL Server")
+        print(f"database enters the history at {MSSQL_ENTRY_STAMP}: run")
+        print(f"'alembic stamp {MSSQL_ENTRY_STAMP}' (if not yet stamped) then")
+        print("'alembic upgrade head'. Never upgrade from 0001 on SQL Server.")
     if result.includes_admin_reset:
         print()
         print("WARNING: 0011_platform_admin_default_false sets is_platform_admin to")

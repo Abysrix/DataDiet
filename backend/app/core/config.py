@@ -54,9 +54,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     # Database ---------------------------------------------------------------
-    # ``postgresql+psycopg2://`` is the staging/production target (ADR-0025).
-    # The driver suffix is required, not decorative: SQLAlchemy resolves a bare
-    # ``postgresql://`` URL to the psycopg-3 driver, which is not installed.
+    # ``postgresql+psycopg2://`` is the PostgreSQL staging target (ADR-0025) and
+    # ``mssql+pymssql://`` is the Azure SQL target (ADR-0026). The driver suffix
+    # is required, not decorative: bare URLs resolve to drivers this image does
+    # not install. Azure SQL connection options belong in the URL query string.
     database_url: str = DEV_DATABASE_URL
     database_echo: bool = False
 
@@ -242,7 +243,8 @@ class Settings(BaseSettings):
         if "://" not in value:
             raise ValueError(
                 "DATABASE_URL must be a SQLAlchemy URL such as "
-                "postgresql+psycopg2://user:password@host:5432/database"
+                "postgresql+psycopg2://user:password@host:5432/database or "
+                "mssql+pymssql://user:password@host:1433/database"
             )
         return value
 

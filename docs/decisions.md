@@ -314,3 +314,123 @@ Every one of the sixteen call sites declares its dependencies: `[activeInstituti
 **Why.** The previous boundary (ADR-0014) verified tokens this API signed itself, which is enough for a demo but not for a hosted staging environment: it would mean building, storing and rotating a password system for a project whose entire value is *not* holding personal data. Clerk takes the identity surface, and the split keeps the dangerous part out of scope — the API holds only a public JWKS, so the worst case of a frontend compromise is a publishable key, which is public by design. Email is the obvious join key and the wrong one, because providers let people change it and institutions let two people share a local part; a unique `(provider, subject)` pair is the only stable identifier, which is also why the binding script refuses any value containing `@`. Removing dev-login from the protected environments at registration time rather than in the handler is the difference between "hidden button" and "no anonymous path to create an account or grant `platform_admin`": a 404 route cannot be probed, and the handler's own 503 stays as the second lock. The PostgreSQL decision is a dialect problem, not a URL problem — MySQL accepts integer literals as boolean defaults and `psycopg2` rejects them with `DatatypeMismatch`, and its DDL is transactional, so a replay that fails leaves nothing behind rather than half a schema; replaying `0001`–`0012` to "get" PostgreSQL would therefore be both broken and, once edited, a rewrite of applied history. A baseline revision is the documented Alembic answer and it keeps one head. Finally, Clerk's SDK owns browser session tokens *by design* and refreshes them without asking; copying one into `tokenStore` would create a second credential that goes stale while the real one works, and a stale credential is exactly how a staging UI ends up showing someone else's scope.
 
 **Consequences.** `GET /api/v1/auth/config` gained a fifth mode: `authentication` is now `development | clerk | bearer_boundary | unconfigured` and the response carries `identity_provider` (`clerk | local | none`), so `frontend/src/api/types.ts` mirrors both and `pages/SignIn.tsx` renders Clerk's form — or an honest "this build has no publishable key" panel — instead of a DataDiet credential form in that mode. Nothing was removed: `dev-login` still answers outside protected environments, pasted-token sign-in still answers the bearer boundary, and every existing page, permission string and institution-scope rule behaves as before. Verification moved from one path to a matrix. `backend/tests/test_clerk_verification.py`, `test_jwks_client.py`, `test_clerk_identity.py`, `test_bind_clerk_identity.py` and `test_migration_preflight.py` cover the verifier, the cache and rotation limits, the `sub` → account mapping (including that an unbound subject gets no account and no privileges, that an email change does not create a second user, and that auto-provisioning never grants administration), the operator CLI's refusals and audit trail, and the dialect-aware preflight; `test_migrations_postgresql.py` runs a real PostgreSQL server through `pgserver` (skipping with a stated reason when it is absent) and proves the single head, that the MySQL history cannot be replayed on PostgreSQL, that the documented stamp-then-upgrade path reaches head, that `compare_metadata()` reports zero drift against the models, and that `0013` issues no operation when the bound dialect is not PostgreSQL — proven with a recording `op` stand-in because no disposable MySQL exists in this environment, not by applying it to a live MySQL server — and is forward-only on PostgreSQL. SQLite is explicitly *not* treated as evidence of PostgreSQL behaviour, and the MySQL migration suite remains in place, now expecting head `0014_external_identities`. On the frontend, `src/auth/ClerkAuth.test.tsx` and the Clerk cases in `src/pages/SignIn.test.tsx` assert that a Clerk session token is the bearer credential on every request with no local copy, that a stale development token is discarded and never sent, that profile and permissions come only from `/auth/me`, that a refused or unlinked identity is shown as the server's own refusal with no session, that sign-out ends the provider's browser session as well as the local one, and that protected routes stay behind the provider session. Because the API client now resolves its credential asynchronously, page tests that answer a request synchronously after render had to wait for the request first (`RiskAnalysis.test.tsx`); the assertions themselves are unchanged. The Vitest *worker* configuration is now part of `npm test` (`--pool=forks --poolOptions.forks.maxForks=4`): measured on the 507-test suite, that configuration passes reproducibly while the default pool fails a shifting set of 5–6 tests with `Test timed out in 5000ms` and 1-second `findBy` timeouts caused by one-fork-per-core oversubscription starving jsdom. No timeout was increased, no test skipped, no assertion weakened — the change is concurrency only, and `scripts/check.ps1` therefore now runs the same gate CI runs. Two claims stay explicitly unproven by test: no test in this repository has spoken to a real Clerk instance (the SDK is replaced by a controllable stand-in, so Clerk's hosted form and token minting are exercised by no automated test here), and nothing has been deployed to Render, so the staging runbook is documentation whose facts come from Render's own docs, not from an executed deploy. The residual risks are the ones this design accepts knowingly: a protected environment with `CLERK_ISSUER` unset falls back to the HS256 bearer boundary rather than failing, which is a configuration the operator must not ship; `0013` cannot be downgraded on PostgreSQL; and `external_identities` makes binding an operational dependency — a Clerk user with no binding sees `unknown_account` until an operator runs the script.
+
+---
+
+## ADR-0026 — Azure SQL free-tier demo with a Vercel frontend and local backend
+
+**Decision.** The Vite build is hosted on Vercel
+(`frontend/vercel.json`: Vite build, `dist` output, SPA rewrite to
+`/index.html`) and the FastAPI service runs locally on this machine at
+`127.0.0.1:8000`. An earlier Railway plan was superseded before any Railway
+resource existed: hosting the backend locally removes Railway's dynamic-egress
+problem and lets the Azure SQL firewall stay limited to one operator IP. A free,
+account-less Cloudflare quick tunnel supplies the public HTTPS origin
+`https://experimental-flows-mounts-investor.trycloudflare.com` that forwards to
+that loopback service, so remote browsers are not handed their own
+`localhost`. The frontend receives only the public
+`VITE_API_BASE_URL=https://experimental-flows-mounts-investor.trycloudflare.com`;
+the git-ignored root `.env` receives the secret `DATABASE_URL` and the exact
+Vercel origin in `CORS_ORIGINS`. No `VITE_` variable carries a secret.
+
+The database is Azure SQL Database's free serverless tier in Southeast Asia
+(Central US was rejected by subscription policy), reached with
+`mssql+pymssql://`. `pymssql` needs no system ODBC driver and negotiates Azure
+SQL's required TLS itself; `encrypt`, `trust_server_certificate` and `open_ssl`
+are **not** valid pymssql URL options. The working URL uses
+`?tds_version=7.4&login_timeout=20`. An Azure SQL login of the form
+`user@server` is written `user%40server`; Alembic's INI parser would treat the
+bare `%` as interpolation, so `database/migrations/url_escape.py` doubles it
+before Alembic reads the option.
+
+A new revision `0015_mssql_baseline` creates the 0001..0012 schema on SQL Server
+and is a no-op on MySQL and PostgreSQL. `0014_external_identities` runs before it
+in the graph but is a no-op on `mssql`, because its `app_users` foreign key
+cannot resolve until the baseline creates the table; the baseline therefore
+creates `external_identities` too. A fresh SQL Server database is stamped at
+`0012_audit_platform_admin_reset` and then upgraded to head; the MySQL-only
+history is never replayed and applied history is never edited. SQL Server also
+rejects `ON DELETE RESTRICT` and multiple cascade paths, so the baseline uses
+`NO ACTION` where needed. The read-only migration preflight accepts `mssql` and
+prints the stamp-then-upgrade entry path.
+
+**Why.** The application models and services are already SQLAlchemy-generic;
+the real blockers were the driver, the dialect gate and the missing baseline.
+A dialect-gated baseline follows the precedent of `0013_postgresql_baseline`
+without rewriting migrations already applied elsewhere, while the SPA rewrite
+is required because `BrowserRouter` deep links would otherwise 404 on Vercel.
+Keeping the backend local and the firewall narrow honours the repository's
+safety rules: a free-tier demo is not worth an unapproved internet-facing
+database. The account-less tunnel is the minimum change that lets a remote
+browser reach the loopback service without a hosting service or a broad SQL
+firewall rule; it is a demo convenience, not a security boundary or a durable
+deployment.
+
+**Consequences.** The Alembic head changes from `0014_external_identities` to
+`0015_mssql_baseline`, so every expected-head test and operator document was
+updated. MySQL treats both `0013` and `0015` as pending no-ops; PostgreSQL
+treats `0015` as a pending no-op. The executed path created the free serverless
+database, a single-IP firewall rule, applied the migration chain to head,
+verified TLS (`encrypt_option = TRUE`), deployed the Vercel project
+`datadiet-demo` at `https://datadiet-demo.vercel.app`, started the free tunnel,
+and smoke tested the tunneled `/api/v1/health`, `/api/v1/health/ready`, CORS
+preflight, and a fresh browser load of `/api/v1/auth/config`. The tunnel URL is
+random and changes whenever `cloudflared` restarts; each new URL must be baked
+into a Vercel redeploy because Vite fixes `VITE_API_BASE_URL` at build time.
+Backend `CORS_ORIGINS` does not change on a tunnel restart: the browser origin
+remains `https://datadiet-demo.vercel.app`. Serverless auto-pause makes the
+first connection after idle time fail with `40613`; the operator retries, and
+the runbook records this instead of hiding it. Only synthetic `SYNTH-`
+fixtures may be used: a successful connection is not evidence of seeded rows or
+of a real institutional integration. The tunnel is public and anyone with its
+URL can call the development API, including `/api/v1/auth/dev-login`; stop it
+after the demo. Authentication stays fail-closed in protected environments
+until Clerk or a strong `AUTH_JWT_SECRET` is configured; the local
+`development` dev-login is for this demo only. The full operator record is
+`docs/vercel-local-azure-sql.md`.
+
+## ADR-0027 — Fix SQL Server boolean filters and simplify the demo sign-in
+
+**Decision.** Two changes close the demo's sign-in problem without changing
+what authentication is or what any role may do. First, boolean filters in
+`backend/app/core/auth.py` and `backend/app/api/routes/users.py` use
+SQLAlchemy's `== true()` instead of `.is_(True)`. SQLAlchemy compiles the latter
+to `IS 1` on SQL Server, which rejects it; the resulting 500 was reported to the
+browser only as `TypeError: Failed to fetch`, because Starlette does not add
+CORS headers to an unhandled server error. `backend/tests/test_mssql_boolean_filters.py`
+compiles the affected queries against the `mssql` dialect and asserts that no
+`IS 1` remains. Second, `frontend/src/pages/SignIn.tsx` presents the development
+path as one card with two primary fields — email and role — plus an explicit
+`Advanced options` disclosure for display name, institution id and platform
+admin, and a link to the pasted-token path instead of a permanently visible
+second form. The default email is a `SYNTH-` address. The four states reported
+by `GET /api/v1/auth/config` remain honest and unchanged; no route, API schema,
+role, permission, audit rule or data fixture was altered.
+
+**Why.** The `ui-ux-pro-max` skill was installed locally at the user's request
+and searched for this page. Its design-system recommendation was Minimalism /
+Swiss Style with low variance and motion, spacious density and an enterprise
+SaaS tone; its form guidance asked for clear submit feedback and announced
+errors. Those fit the repository's existing `index.css` tokens, so the redesign
+reused them instead of introducing a parallel theme. A skill search for
+collapsible advanced settings found no database match, so the disclosure is a
+general progressive-disclosure decision, not a claimed catalog rule. The
+operator-facing controls are still available — they are not removed — but they
+do not compete with the two fields needed for the demo. The backend fix was
+required before any UI polish could help: a successful `/auth/config` response
+followed by a failing `dev-login` was a real server error hidden by CORS, and a
+prettier form would not have repaired it.
+
+**Consequences.** A tunneled `POST /api/v1/auth/dev-login` now returns 200 with
+the expected Vercel origin allow-header and a server-verified bearer token.
+Sign-in tests cover clearing the default email, opening advanced fields and
+switching to the token path; the full local gate passes (backend pytest 368
+passed / 20 skipped, Vitest 509 passed, production build). The bundle was
+redeployed to production as `dpl_9mnP5Z4E6DdyfEa6nAWxUZfi52YJ` and aliased to
+`https://datadiet-demo.vercel.app`; a fresh hosted-browser load confirmed the
+simplified page, a tunneled config response of 200 and no console errors. The
+tunnel remains public and ephemeral, and the database still has no seeded
+institutional rows.
+Nothing here makes development sign-in valid in a protected environment, and
+nothing here uploads real personal data or claims an unimplemented
+integration.

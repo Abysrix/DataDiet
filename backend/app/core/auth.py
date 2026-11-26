@@ -41,7 +41,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from app.core.config import DEV_AUTH_JWT_SECRET, Settings, get_settings
@@ -547,7 +547,8 @@ def build_current_user(
     memberships = db.scalars(
         select(UserMembership).where(
             UserMembership.app_user_id == user.id,
-            UserMembership.is_active.is_(True),
+            # `is_(True)` compiles to `IS 1`, which SQL Server rejects.
+            UserMembership.is_active == true(),
         )
     ).all()
     institutions = frozenset(m.institution_id for m in memberships)

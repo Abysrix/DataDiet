@@ -671,7 +671,12 @@ def get_assessment_history(db: Session, asset_id: int) -> list[Assessment]:
         db.execute(
             select(RetentionAssessment)
             .where(RetentionAssessment.asset_id == asset_id)
-            .order_by(RetentionAssessment.assessed_at.desc())
+            # The clock can return the same value for two quick reassessments.
+            # Without a unique tie-break, newest-first would depend on row scan
+            # order and could put an older recommendation at index 0.
+            .order_by(
+                RetentionAssessment.assessed_at.desc(), RetentionAssessment.id.desc()
+            )
         )
         .scalars()
         .all()

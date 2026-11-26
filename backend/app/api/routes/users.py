@@ -14,7 +14,7 @@ No password or credential is ever accepted, returned, or stored here.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -150,8 +150,9 @@ def update_user(
                 db.execute(
                     select(AppUser.id).where(
                         AppUser.id != user.id,
-                        AppUser.is_platform_admin.is_(True),
-                        AppUser.is_active.is_(True),
+                        # `is_(True)` compiles to `IS 1`, which SQL Server rejects.
+                        AppUser.is_platform_admin == true(),
+                        AppUser.is_active == true(),
                     )
                 )
                 .scalars()

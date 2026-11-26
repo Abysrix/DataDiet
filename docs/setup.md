@@ -86,7 +86,8 @@ Set-Location backend
 ..\.venv\Scripts\alembic.exe current
 ```
 
-Expected result: `0014_external_identities` (the single head). Without Docker,
+Expected result: `0015_mssql_baseline` (the single head; `0013` and `0015` are
+no-ops on MySQL). Without Docker,
 skip this section — the application still runs and reports the database as
 unreachable.
 
@@ -105,14 +106,27 @@ Set-Location backend
 ```
 
 Never stamp or upgrade a database that already has tables: `stamp` only writes the
-revision row. An existing MySQL database needs nothing new — `0013` detects the
-dialect and does nothing, so `upgrade head` there applies only
-`0014_external_identities`. `0013_postgresql_baseline` is forward-only: its
-downgrade refuses to run rather than drop a baseline. The development/test helper
+revision row. An existing MySQL database needs nothing new — `0013` and `0015`
+detect the dialect and do nothing, so `upgrade head` there applies only
+`0014_external_identities`. `0013_postgresql_baseline` and
+`0015_mssql_baseline` are each forward-only: their downgrade refuses to run
+rather than drop a baseline. The development/test helper
 `pgserver` starts a disposable local PostgreSQL for
 `tests/test_migrations_postgresql.py`; it is in `requirements-dev.txt` only, and
 those tests skip with a stated reason when it is unavailable. SQLite is not a
 supported target and is never used as evidence of PostgreSQL behaviour.
+
+**Azure SQL Database (ADR-0026).** `DATABASE_URL` also accepts
+`mssql+pymssql://user:password@host:1433/dbname?tds_version=7.4&login_timeout=20`.
+Azure SQL enforces TLS; pymssql 2.4 negotiates it and rejects `encrypt` and
+`trust_server_certificate` as URL options. A *fresh* SQL Server database uses the
+same stamp point as PostgreSQL because `0001`–`0012` contain MySQL-only DDL:
+`stamp 0012_audit_platform_admin_reset`, then `upgrade head`. On `mssql`,
+`0014_external_identities` is a no-op and `0015_mssql_baseline` creates the
+equivalent schema including `external_identities`. The operator runbook,
+including the narrow firewall rule, is `docs/vercel-local-azure-sql.md`. A live
+Azure SQL database was migrated to `0015_mssql_baseline` on 2026-11-26; verify
+with `alembic current` before relying on that statement.
 
 Supported rollback boundary: **`0005_source_connectors`** — do not
 `alembic downgrade` below it (ADR-0016 explains the safe failure mode and the
@@ -303,16 +317,17 @@ on every existing account** (ADR-0017). Forward migration
 post-reset administrator count; it changes no account or privilege (ADR-0020).
 Treat applying them as a privileged change, not a routine startup step.
 
-Supported engines: **MySQL 8.x** and **PostgreSQL** (ADR-0025). The development
-compose file pins `mysql:8.4`. The live migration suite passed 19/19 on MySQL
+Supported engines: **MySQL 8.x**, **PostgreSQL** (ADR-0025) and **Azure SQL
+Database / SQL Server** (ADR-0026). The development compose file pins `mysql:8.4`. The live migration suite passed 19/19 on MySQL
 8.0.46 locally; CI is configured to use `mysql:8.4` but has not run on GitHub.
 The PostgreSQL chain is exercised by `tests/test_migrations_postgresql.py`
 against a real `pgserver` instance (10 tests), not by the MySQL suite and not by
 SQLite. A database on either engine enters the history at its own revision:
 PostgreSQL needs the `0013_postgresql_baseline` entry path in section 4 (stamp
 `0012_audit_platform_admin_reset`, then `upgrade head`) because `0001`–`0012`
-cannot be replayed there, and `0013` is a no-op on MySQL. The preflight reports
-the dialect and rejects any other engine with exit code 6.
+cannot be replayed there, and `0013` is a no-op on MySQL. SQL Server uses the
+same `0012` entry path; `0015_mssql_baseline` is a no-op on MySQL and PostgreSQL.
+The preflight reports the dialect and rejects any other engine with exit code 6.
 
 ### 8.1 Preflight (read-only)
 
@@ -331,8 +346,9 @@ Exit codes: `0` expected state (at head, or on-chain with pending migrations);
 `1` unexpected internal error; `2` database unreachable or URL unusable; `3`
 not under Alembic control (`alembic_version` missing, empty or ambiguous); `4`
 stamped revision not in this repository; `5` ambiguous repository history
-(multiple heads); `6` unsupported database dialect (only MySQL and PostgreSQL are
-valid migration targets, and the check runs before any connection is made).
+(multiple heads); `6` unsupported database dialect (only MySQL, PostgreSQL and
+SQL Server are valid migration targets, and the check runs before any connection
+is made).
 **Any non-zero code: stop and fix the cause.**
 
 Do not continue unless all of the following are true:

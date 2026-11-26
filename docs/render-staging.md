@@ -32,7 +32,8 @@ local testing cannot prove:
 1. that a **real Clerk instance** issues RS256 session tokens this API accepts,
    and that an unbound subject is refused (`unknown_account`);
 2. that the **PostgreSQL** migration chain (`0013_postgresql_baseline` →
-   `0014_external_identities`) builds a working schema on a real server;
+   `0014_external_identities` → a no-op `0015_mssql_baseline`) builds a working
+   schema on a real server;
 3. that the **frontend ↔ backend contract** survives the browser: sign-in,
    `GET /api/v1/auth/me`, permission-aware navigation, and 401 forced sign-out.
 
@@ -338,7 +339,7 @@ alembic stamp 0012_audit_platform_admin_reset
 # 3. Apply the baseline and everything after it.
 alembic upgrade head
 
-# 4. Confirm a single head at 0014_external_identities.
+# 4. Confirm a single head at 0015_mssql_baseline.
 alembic current
 ```
 
