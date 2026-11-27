@@ -597,6 +597,12 @@ paths.
 showcase build described below; ADR-0030 remains in force for every other
 build.
 
+**Amendment (2026-11-27, operator request).** The global prototype banner
+described below is no longer rendered on any hosted page. The `/showcase` guide
+remains available by direct URL, and seeded rows remain labeled
+`[SHOWCASE SAMPLE]` in Azure SQL. The in-app labeling mitigation is therefore
+retired; hosted verification must not claim a banner.
+
 **Date.** 2026-11-27
 
 **Context.** The operator needs a complete, presentable prototype today to show
@@ -618,9 +624,9 @@ empty states alone.
 - All reads and writes still go through the real API, real authentication, and
   Azure SQL. No endpoint may return a fabricated success state or simulated
   connector result.
-- The UI shows a persistent, dismissible-once-per-session banner reading that
-  the app is in prototype mode and the records are fictional sample data. The
-  banner appears on every page while either flag is enabled.
+- The UI originally showed a persistent prototype banner. By operator request
+  on 2026-11-27 that banner was removed; no hosted page now renders it. The
+  `/showcase` guide remains available by direct URL.
 - The mode is for today's presentation only. Teardown is a human-approved
   operator action: disable both flags, redeploy, and remove the showcase rows
   through a reviewed script. No automatic deletion or bulk disposal is part of
@@ -636,8 +642,9 @@ empty states alone.
   integration, blurred the line between sample and production data, and was
   removed by ADR-0030 for that reason.
 
-**Consequences.** The hosted prototype will show fictional data under an
-unmissable label. Tests must prove that the sample surface is absent when the
+**Consequences.** The hosted prototype shows fictional data whose rows are
+labeled `[SHOWCASE SAMPLE]` in Azure SQL and documented here, but it no longer
+carries an unmissable in-app label. Tests must prove that the sample surface is absent when the
 flags are off. The frontend bundle will contain the word `SHOWCASE` only as a
 prototype label, never as a hidden data source. This ADR does not authorize
 real institutional systems, real personal data, or untested capability claims;
@@ -646,10 +653,9 @@ production-ready multi-tenant release.
 
 **Verification (local, 2026-11-27).** `scripts/check.ps1` passed end to end:
 backend and operator-script Ruff clean, pytest 395 passed / 20 skipped, frontend
-typecheck clean, Vitest 557 passed across 38 files, and the production build
+typecheck clean, Vitest 553 passed across 37 files, and the production build
 succeeded. Focused tests cover both flag defaults and their gating
-(`test_config_showcase.py`, `src/showcase.test.ts`, `ShowcaseBanner.test.tsx`),
-the banner and guide copy, the seed's guards and idempotence
+(`test_config_showcase.py`, `src/showcase.test.ts`), the guide copy, the seed's guards and idempotence
 (`test_seed_showcase.py`), the new Dashboard and Risk read APIs, and the real
 Users / Assets / Sources UI contracts. Every score shown comes from
 `app.services.risk.compute_risk` under `documented-risk-v1` (ADR-0005). No
@@ -657,5 +663,5 @@ Users / Assets / Sources UI contracts. Every score shown comes from
 the seed is the only writer of fictional rows and uses `DATABASE_URL` plus a
 sanitized target print. **Pending (Task 12):** push to `render-demo`, set both
 hosted flags, seed Azure SQL, and perform the live browser pass that confirms the
-banner and database-backed rows on the deployed app. Until then this ADR records
+database-backed rows on the deployed app. Until then this ADR records
 a locally verified prototype, not a hosted claim.

@@ -5,7 +5,7 @@ Source spec: `docs/decisions.md` ADR-0032. Deferred production work remains in
 
 ## Overview
 
-Build a time-boxed, clearly labeled prototype on the current hosted app. All
+Build a time-boxed prototype on the current hosted app. All
 displayed records are fictional sample rows written to Azure SQL by a reviewed
 operator script and fetched through the real FastAPI endpoints. No browser
 fixtures, fake endpoints, simulated connectors, or invented success states are
@@ -14,9 +14,10 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 ## Architecture Decisions
 
 - **Two independent flags.** Backend `SHOWCASE_MODE` controls the seed/API
-  surface; frontend `VITE_SHOWCASE_MODE` controls the persistent banner and
-  showcase guide. Both default to false, so normal builds retain ADR-0030's
-  no-user-facing-sample-data rule.
+  surface; frontend `VITE_SHOWCASE_MODE` is retained for the showcase build.
+  The persistent banner originally planned here was removed at the operator's
+  request; `/showcase` remains a direct route. Both flags default to false, so
+  normal builds retain ADR-0030's no-user-facing-sample-data rule.
 - **Azure SQL is the only data source.** `scripts/seed_showcase.py` opens the
   same `DATABASE_URL` as the API, writes through SQLAlchemy models, and is
   idempotent. The browser only ever reads through `/api/v1/*`.
@@ -32,12 +33,12 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 ### Phase 1: Guardrails and seed foundation
 
 - [x] Task 1: Backend showcase flag and `.env.example` wiring
-- [x] Task 2: Persistent showcase banner and guide route in the frontend
+- [x] Task 2: Showcase guide route in the frontend (global banner removed)
 - [x] Task 3: Idempotent Azure SQL showcase seed script with labeled fictional rows
 
 ### Checkpoint: Guardrails
 - [x] Focused backend/frontend tests pass
-- [x] Banner absent when `VITE_SHOWCASE_MODE` is off
+- [x] No global banner rendered; guide route retained
 - [x] Seed script refuses to run without an explicit operator actor
 
 ### Phase 2: Complete the real feature surface
@@ -52,7 +53,7 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 ### Checkpoint: Feature surface
 - [x] Every functional nav entry loads real API data
 - [x] Every stub states that the capability is not implemented
-- [x] Full `scripts/check.ps1` gate passes (395 backend passed / 20 skipped, 557 frontend passed)
+- [x] Full `scripts/check.ps1` gate passes (395 backend passed / 20 skipped, 553 frontend passed)
 
 ### Phase 3: Seed completeness and hosted verification
 
@@ -61,7 +62,7 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 - [ ] Task 12: Commit, push, configure Render/Vercel flags, seed Azure SQL and browser smoke test
 
 ### Checkpoint: Showcase ready
-- [ ] Hosted banner visible on every page
+- [ ] Hosted app renders no global banner
 - [ ] Hosted data traces back to Azure SQL through the API
 - [ ] Full gate passes from the exact deployed commit
 
@@ -70,7 +71,7 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Sample data leaks into normal builds | High | Server/frontend flags default off; tests assert absence; ADR-0032 remains temporary |
-| Public prototype mistaken for production | High | Persistent banner, guide page, docs and ADR all state prototype-only |
+| Public prototype mistaken for production | High | Guide page, docs and ADR state prototype-only; seeded rows are labeled in the database |
 | Seed script writes to wrong database | High | Uses `DATABASE_URL` only, prints sanitized target, requires `--confirm-showcase-write` and an actor |
 | Dashboard/Risk queries become slow on Azure SQL | Medium | Aggregate with bounded queries; reuse existing indexed tables; Paginate lists |
 | Render free-tier sleep delays first load | Medium | Document ~1 minute wake; smoke test after warm-up |

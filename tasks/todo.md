@@ -9,10 +9,10 @@ Plan: `tasks/plan.md`. Source decision: `docs/decisions.md` ADR-0032.
   - Verification: `..\scripts\check.ps1` and focused config tests.
   - Files: `backend/app/core/config.py`, `.env.example`, `backend/tests/test_config_showcase.py`.
 
-- [x] Task 2: Persistent showcase banner and guide route
-  - Acceptance: banner appears on every protected page when `VITE_SHOWCASE_MODE=true`, is absent otherwise, and links to a route explaining the prototype and its limits.
-  - Verification: frontend tests for banner on/off and guide content; typecheck.
-  - Files: `frontend/src/components/ShowcaseBanner.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/pages/ShowcaseGuide.tsx`, `frontend/src/App.tsx`, `frontend/src/components/nav.ts`, tests.
+- [x] Task 2: Showcase guide route (global banner removed at operator request)
+  - Acceptance: `/showcase` explains the prototype and its limits; no persistent banner is rendered.
+  - Verification: frontend guide test, shell test, typecheck.
+  - Files: `frontend/src/components/Layout.tsx`, `frontend/src/pages/ShowcaseGuide.tsx`, `frontend/src/App.tsx`, tests.
 
 - [x] Task 3: Idempotent Azure SQL showcase seed script
   - Acceptance: script uses `DATABASE_URL`, requires an actor and `--confirm-showcase-write`, labels all rows as fictional showcase samples, and can be rerun without duplicates.
@@ -20,7 +20,7 @@ Plan: `tasks/plan.md`. Source decision: `docs/decisions.md` ADR-0032.
   - Files: `scripts/seed_showcase.py`, `backend/tests/test_seed_showcase.py`, `docs/render-azure-sql-demo.md`.
 
 ## Checkpoint: Guardrails
-- [x] Focused tests pass; banner absent when flag off; seed guard refuses unconfirmed writes.
+- [x] Focused tests pass; no global banner; seed guard refuses unconfirmed writes.
 
 ## Phase 2: Complete the real feature surface
 
@@ -70,16 +70,16 @@ Plan: `tasks/plan.md`. Source decision: `docs/decisions.md` ADR-0032.
   - Files: `docs/decisions.md`, `docs/architecture.md`, `README.md`, `docs/render-azure-sql-demo.md`.
 
 - [ ] Task 12: Deploy and smoke test
-  - Acceptance: commit pushed to `render-demo`; Render/Vercel flags configured; seed run against Azure SQL; hosted browser pass proves banner, data and no fabricated integrations.
+  - Acceptance: commit pushed to `render-demo`; Render/Vercel flags configured; seed run against Azure SQL; hosted browser pass proves data and no fabricated integrations.
   - Verification: full gate from deployed commit, live health/readiness, API list calls, browser screenshots/network trace.
   - Files: deployment environment only.
 
 ## Checkpoint: Showcase ready
-- [ ] Hosted banner visible on every page; data comes from Azure SQL via API; gate passes.
+- [ ] No global banner is rendered; data comes from Azure SQL via API; gate passes.
 
 ## Gate result (local, before hosted deployment)
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1` passed:
 backend Ruff and operator-script Ruff clean, pytest 395 passed / 20 skipped,
-frontend typecheck clean, Vitest 557 passed (38 files), and the production build
+frontend typecheck clean, Vitest 553 passed (37 files), and the production build
 succeeded.

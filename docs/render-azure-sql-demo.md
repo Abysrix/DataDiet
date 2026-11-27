@@ -245,16 +245,17 @@ made here.
 
 ## 11. Temporary showcase prototype (ADR-0032)
 
-This section is the operator checklist for today's clearly labeled prototype.
+This section is the operator checklist for today's prototype.
 Nothing below is a production configuration. Both showcase flags default to
-`false`, so a build without them still hides all sample data and the banner.
+`false`, so a build without them still hides all sample data. No persistent
+prototype banner is rendered.
 
 ### 11.1 Flags
 
 | Platform | Variable | Showcase value | Effect |
 | --- | --- | --- | --- |
 | Render (backend) | `SHOWCASE_MODE` | `true` | Permits the reviewed seed script to write; exposes the backend showcase surface |
-| Vercel (frontend) | `VITE_SHOWCASE_MODE` | `true` | Shows the persistent banner and links the `/showcase` guide |
+| Vercel (frontend) | `VITE_SHOWCASE_MODE` | `true` | Retained for the showcase build; no global banner is rendered |
 
 A Render environment-variable change rebuilds the service. Vercel must be
 redeployed separately after its variable is set. Keep `CORS_ORIGINS` exactly
@@ -300,10 +301,10 @@ personal data.
      `SYNTH-admin@datadiet.local`, role `admin`, with `institution_id = M` in
      **Advanced options**. The role/institution fields are honoured only for the
      three allow-listed synthetic emails (ADR-0029), so do not use a wildcard.
-4. In a fresh browser session verify the persistent prototype banner on every
-   protected page, then open `/showcase`. The guide must list archive execution,
-   retrieval fulfilment, report export, password signup and private workspaces
-   as **not implemented**.
+4. In a fresh browser session confirm that no persistent prototype banner is
+   rendered, then open `/showcase` directly. The guide must list archive
+   execution, retrieval fulfilment, report export, password signup and private
+   workspaces as **not implemented**.
 5. In the browser network panel every data request must go to the Render origin
    (`/api/v1/...`). There must be no localhost or tunnel request, no demo
    endpoint, no fabricated success toast, and no connector claiming to contact
@@ -321,8 +322,8 @@ The application contains no deletion, bulk-disposal or teardown command. To end
 the showcase:
 
 1. Remove `SHOWCASE_MODE` from Render and `VITE_SHOWCASE_MODE` from Vercel, then
-   redeploy both. The banner and guide disappear and the seed script refuses to
-   write again.
+   redeploy both. The seed script refuses to write again; the `/showcase` guide
+   remains a static explanation and fetches no sample data.
 2. Obtain explicit human approval naming the `SHOWCASE-DEMO` institution and the
    exact rows in scope. Only then, in a reviewed database session, remove the
    showcase institution and its dependent fictional rows; never run a DELETE

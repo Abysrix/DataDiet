@@ -18,18 +18,18 @@
 
 ## Showcase prototype status (ADR-0032, locally verified 2026-11-27)
 
-Temporary, clearly labeled showcase exception. Backend `SHOWCASE_MODE` and
+Temporary showcase exception. Backend `SHOWCASE_MODE` and
 frontend `VITE_SHOWCASE_MODE` both default to `false`; the seeded rows exist only
 when an operator runs `scripts/seed_showcase.py` against `DATABASE_URL` with an
 actor and `--confirm-showcase-write`. The browser talks only to the real API;
 there are no browser fixtures and no demo endpoints. The local gate passed
-(395 backend tests passed / 20 skipped, 557 Vitest tests passed, typecheck and
+(395 backend tests passed / 20 skipped, 553 Vitest tests passed, typecheck and
 production build). Hosted configuration, seeding and browser verification remain
 Task 12 and are not claimed here.
 
 | Area | Source of truth | Status in this build |
 | --- | --- | --- |
-| Persistent banner and `/showcase` guide | `VITE_SHOWCASE_MODE`; `ShowcaseBanner.tsx`, `ShowcaseGuide.tsx` | Implemented; banner hidden when flag off, guide states all records are fictional |
+| `/showcase` guide | `ShowcaseGuide.tsx` | Available by direct URL; global prototype banner removed at operator request; guide states all records are fictional |
 | Dashboard counts | `GET /api/v1/dashboard/summary` over real tables | Implemented; loading, empty and error states in `Dashboard.tsx` |
 | Risk posture | `GET /api/v1/risk/assessments`, `GET /api/v1/risk/rules` | Implemented; bands/indicators from `compute_risk` (`documented-risk-v1`), no invented scores |
 | User directory | Existing `/api/v1/users` routes | Implemented; verified profile, memberships and permitted create/update only; no passwords, invitations or deletion |

@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { platformAdmin, testUser, withAuth } from "../test/auth";
 import type { UserProfile } from "../api/types";
 import { NAV_ITEMS, visibleNavGroups, visibleNavItems } from "./nav";
@@ -206,28 +206,6 @@ describe("Layout navigation", () => {
     const notice = within(sidebar()).getByRole("note");
     expect(notice).toHaveTextContent("No destructive actions enabled");
     expect(notice).toHaveTextContent("Archiving and disposal are not implemented");
-  });
-});
-
-describe("Showcase prototype label", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("shows the prototype notice on the shell when the build opts in", () => {
-    vi.stubEnv("VITE_SHOWCASE_MODE", "true");
-    renderLayout();
-
-    const notice = screen.getByRole("note", { name: /prototype data notice/i });
-    expect(notice).toHaveTextContent("fictional sample data");
-    expect(notice).toHaveTextContent("Azure SQL");
-  });
-
-  it("keeps the shell free of sample-data copy in a normal build", () => {
-    vi.stubEnv("VITE_SHOWCASE_MODE", "false");
-    renderLayout();
-
-    expect(screen.queryByRole("note", { name: /prototype data notice/i })).not.toBeInTheDocument();
   });
 });
 

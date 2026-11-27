@@ -18,8 +18,9 @@ ever deleting data automatically.
 > been compiled, validated, or deployed (`docs/azure-architecture.md`).
 >
 > **Temporary showcase exception (ADR-0032):** for the 2026-11-27 prototype,
-> backend `SHOWCASE_MODE=true` and frontend `VITE_SHOWCASE_MODE=true` expose a
-> persistent prototype banner and a `/showcase` guide. All displayed records are
+> backend `SHOWCASE_MODE=true` and frontend `VITE_SHOWCASE_MODE=true` configure
+> the showcase build. The global prototype banner was removed at the operator's
+> request, and `/showcase` remains available by direct URL. All displayed records are
 > fictional `[SHOWCASE SAMPLE]` rows written to Azure SQL by the reviewed
 > `scripts/seed_showcase.py` operator script and read through the real API.
 > Both flags default to `false`; normal builds show no sample data. Password
@@ -97,7 +98,7 @@ Full instructions, troubleshooting, and migration workflow: `docs/setup.md`.
   operator-run seed script and Azure SQL.
 - Automated tests: the backend pytest suite (some database tests skip without a
   disposable database; 395 passed / 20 skipped on the showcase build) and the
-  frontend Vitest suite (557 passed in 38 files), plus live MySQL migration
+  frontend Vitest suite (553 passed in 37 files), plus live MySQL migration
   tests when explicitly enabled with `MIGRATION_TEST_ALLOW_DROP=1` and
   `MIGRATION_TEST_DB_URL`.
 
