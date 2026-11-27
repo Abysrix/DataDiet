@@ -42,6 +42,43 @@ const clerk = vi.hoisted(() => ({
 }));
 
 /**
+ * The last test mounts the real router, including the dashboard. Summary data
+ * is not part of this seam, so it is supplied as a valid (all-zero) response
+ * rather than allowing the generic list-shaped fetch mock below to reach the
+ * page and crash on a missing `lifecycle` field.
+ */
+const dashboard = vi.hoisted(() => ({
+  summary: {
+    institution_id: 1,
+    total_assets: 0,
+    lifecycle: { active: 0, under_review: 0, archived: 0, pending_disposal: 0 },
+    sensitivity: { public: 0, internal: 0, confidential: 0, restricted: 0, unknown: 0 },
+    risk_bands: { low: 0, moderate: 0, high: 0, critical: 0 },
+    active_policies: 0,
+    active_holds: 0,
+    assessments: 0,
+    decisions: 0,
+    recommendations: {
+      RETAIN: 0,
+      ARCHIVE_RECOMMENDED: 0,
+      REVIEW_REQUIRED: 0,
+      DISPOSAL_REVIEW_REQUIRED: 0,
+      BLOCKED_BY_HOLD: 0,
+      NO_APPLICABLE_POLICY: 0,
+    },
+    scan_jobs: {
+      PENDING: 0,
+      RUNNING: 0,
+      COMPLETED: 0,
+      COMPLETED_WITH_ERRORS: 0,
+      FAILED: 0,
+      CANCELLED: 0,
+    },
+    scanned_records: 0,
+  },
+}));
+
+/**
  * A stand-in for Clerk's React SDK. It is written without JSX on purpose: the
  * mock factory runs while the module graph is still being resolved, before this
  * file's own imports exist.
@@ -94,6 +131,10 @@ const devLogin = vi.fn();
  */
 vi.mock("../api/health", () => ({
   fetchHealth: () => Promise.reject(new Error("health is not part of this test")),
+}));
+
+vi.mock("../api/dashboard", () => ({
+  getDashboardSummary: () => Promise.resolve(dashboard.summary),
 }));
 
 vi.mock("../api/auth", () => ({
