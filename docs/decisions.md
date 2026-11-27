@@ -674,3 +674,94 @@ rows, a one-off reviewed transaction deleted them and recorded an audit event.
 No delete command was added to the application, and the directory now contains
 only synthetic accounts. The exact deployment, page sweep, approval and firewall
 evidence is in `docs/render-azure-sql-demo.md`.
+
+---
+
+## ADR-0033 — Dashboard groups one API snapshot by decision need
+
+**Status.** Accepted.
+
+**Amendment (2026-11-27, operator design override).** The operator granted a
+design override with one constraint: not too much information. The controls
+band, sensitivity and recommendation bars, and the full scan-job row described
+below are no longer rendered on the dashboard. The page now keeps one posture
+band, one decision cue, and two distributions; scan coverage remains a single
+footer line. The fields still come from the same summary response, but they are
+not a dashboard promise. No endpoint, permission or domain rule changed.
+
+**Date.** 2026-11-27
+
+**Context.** The dashboard rendered eight equal KPI tiles followed by five equal
+cards. That grid gave volume, risk, governance and scan activity the same visual
+weight, pushed the work awaiting a human decision below a wall of tiles, and used
+a spinner where content-shaped feedback would preserve the page's rhythm. The
+project already has a semantic token system (`index.css`) and shared primitives;
+no new dependency or data source is warranted.
+
+**Decision.** Keep one `GET /api/v1/dashboard/summary` request as the only data
+source and reorganise its presentation:
+
+- a primary posture band holds inventory volume, work under review, stored
+  high/critical risk and scan coverage; a compact controls band holds policies,
+  holds, assessments and decisions;
+- inventory mix (lifecycle, sensitivity) and review signals (risk bands,
+  recommendations) are separate cards with sequential `h2`/`h3` headings;
+- scan jobs keep their own full-width row; the existing refresh, empty, error,
+  permission and signed-out states remain;
+- the data loading state is a labelled skeleton (`role="status"`, `aria-busy`)
+  instead of a spinner, and no figure is invented or additionally derived beyond
+  the existing documented high/critical band sum.
+
+**Consequences.** The page still makes no browser-side claim about data it did
+not receive, and every number continues to trace to the real API. The layout
+uses only existing semantic tokens and primitives, so it inherits the project's
+contrast, focus and reduced-motion rules. A visual change to this page requires
+its tests to be updated; the redesign is local until an operator deploys a new
+frontend build.
+
+**Verification.** `src/pages/Dashboard.test.tsx` covers the scoped request, the
+permission and signed-out gates, the labelled skeleton, the new grouping, the
+API-only figures, the explicit empty state and the retryable error state. The
+full `scripts/check.ps1` gate is recorded in the commit that introduced this ADR.
+
+---
+
+## ADR-0034 — Data-driven WebGL panel with an accessible fallback
+
+**Status.** Accepted.
+
+**Date.** 2026-11-27
+
+**Context.** The operator asked for the Three.js skill guidance to be used
+alongside the dashboard redesign. The hosted skill page was unreachable (HTTP
+429 / Vercel checkpoint), so the local `ui-ux-pro-max` Three.js dataset was used:
+canvas `role="img"` and `aria-label`, container-aware resize with camera aspect
+updates, `setAnimationLoop` only, pause when hidden or offscreen, and explicit
+GPU disposal. The dashboard must not become decorative: the visualisation has
+to explain a real API distribution and stay readable without a GPU.
+
+**Decision.** Add `three` as a code-split dependency and render the risk-band
+counts as four 3D columns in a small panel:
+
+- every column height is derived from `risk_bands` in the existing summary
+  response; no count or score is invented in the browser;
+- the canvas is labelled with the exact counts and has a visible semantic-colour
+  legend; if WebGL2 is unavailable or the import fails, the same counts render
+  through the existing `BarList` with an explicit fallback note;
+- motion is a single one-shot reveal, not an idle spin. `prefers-reduced-motion`
+  draws the final state immediately; the loop pauses on tab hide or offscreen;
+- `ResizeObserver` sizes the renderer and updates `camera.aspect`; geometry and
+  materials are shared, and all GPU resources plus the renderer are disposed on
+  unmount;
+- there is no raycasting, texture loading, orbit control or extra API request.
+
+**Consequences.** The dashboard gains a small, purpose-built visual without
+changing the data contract. Automated jsdom tests cover the fallback path and
+the data labels but not rendered pixels; a browser check is still required
+before claiming the WebGL appearance is verified. Colour values are read from
+the existing CSS tokens, with mirrored fallbacks for tests and pre-style load.
+
+**Verification.** `src/components/Distribution3D.test.tsx` covers both no-context
+and throws-on-context fallback paths. `src/pages/Dashboard.test.tsx` asserts the
+risk panel receives the API scope and that the counts remain visible through
+the fallback. `scripts/check.ps1` must pass after any change to this panel.

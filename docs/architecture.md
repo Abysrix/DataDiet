@@ -35,7 +35,7 @@ removed with an audit event; no application delete command was added.
 | Area | Source of truth | Status in this build |
 | --- | --- | --- |
 | `/showcase` guide | `ShowcaseGuide.tsx` | Available by direct URL; global prototype banner removed at operator request; guide states all records are fictional |
-| Dashboard counts | `GET /api/v1/dashboard/summary` over real tables | Implemented; loading, empty and error states in `Dashboard.tsx` |
+| Dashboard counts | `GET /api/v1/dashboard/summary` over real tables | Implemented; restrained posture band, decision cue, risk WebGL panel with text fallback and lifecycle bars, labelled skeleton loading, explicit empty and error states (ADR-0033/0034). WebGL pixels are not covered by jsdom tests. |
 | Risk posture | `GET /api/v1/risk/assessments`, `GET /api/v1/risk/rules` | Implemented; bands/indicators from `compute_risk` (`documented-risk-v1`), no invented scores |
 | User directory | Existing `/api/v1/users` routes | Implemented; verified profile, memberships and permitted create/update only; no passwords, invitations or deletion |
 | Asset inventory | Existing `/api/v1/assets` routes plus `AssetEditor.tsx` | Implemented; create/patch metadata through the API; no archive, restore or disposal |

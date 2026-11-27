@@ -69,7 +69,7 @@ async function renderDashboard(user = testUser()): Promise<void> {
       user,
     ),
   );
-  await screen.findByText("Assets");
+  await screen.findByText("Assets in scope");
 }
 
 beforeEach(() => {
@@ -123,18 +123,49 @@ describe("Dashboard data request", () => {
 });
 
 describe("Dashboard rendering", () => {
+  it("keeps the page rhythm with a labelled skeleton while the summary loads", () => {
+    getDashboardSummary.mockReturnValue(new Promise(() => {}));
+    render(
+      withAuth(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>,
+      ),
+    );
+
+    expect(
+      screen.getByRole("status", { name: /loading dashboard summary/i }),
+    ).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("groups figures into posture, one decision cue and two distributions", async () => {
+    getDashboardSummary.mockResolvedValue(makeSummary());
+    await renderDashboard();
+
+    expect(screen.getByRole("heading", { name: "Current posture" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review queue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Risk distribution" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lifecycle mix" })).toBeInTheDocument();
+    expect(screen.getByText(/records scanned/i)).toBeInTheDocument();
+  });
+
   it("shows only figures returned by the API", async () => {
     getDashboardSummary.mockResolvedValue(makeSummary());
     await renderDashboard();
 
     expect(screen.getByText("8")).toBeInTheDocument();
     expect(screen.getByText("14")).toBeInTheDocument();
-    expect(screen.getByText("High or critical risk")).toBeInTheDocument();
+    expect(screen.getByText("High / critical")).toBeInTheDocument();
     expect(screen.getAllByText("3").length).toBeGreaterThan(0);
-    expect(screen.getByText("Lifecycle distribution")).toBeInTheDocument();
-    expect(screen.getByText("Risk bands")).toBeInTheDocument();
-    expect(screen.getByText("Review queue")).toHaveAttribute("href", "/recommendations");
-    expect(screen.getByText("Inspect inventory")).toHaveAttribute("href", "/inventory");
+    expect(screen.getByText(/1 active hold in scope/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /review queue/i })).toHaveAttribute(
+      "href",
+      "/recommendations",
+    );
+    expect(screen.getByRole("link", { name: /inspect inventory/i })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
   });
 
   it("renders an explicit empty state when the API returns zero assets", async () => {

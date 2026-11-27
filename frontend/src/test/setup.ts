@@ -55,6 +55,18 @@ if (typeof window.sessionStorage === "undefined") {
   });
 }
 
+/**
+ * jsdom emits a "Not implemented" error for getContext without the optional
+ * canvas package. The harness has no GPU, so it reports the honest unsupported
+ * case; the component's text fallback is what the tests should exercise.
+ */
+if (typeof HTMLCanvasElement !== "undefined") {
+  Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+    configurable: true,
+    value: () => null,
+  });
+}
+
 afterEach(() => {
   cleanup();
 });

@@ -43,6 +43,14 @@ Every routed page must have:
 8. Responsive behaviour at 375px, 768px, 1024px, and 1440px. No horizontal
    overflow; wide tables use the existing table primitive's scroll container.
 
+## Dashboard-specific shape
+
+The dashboard intentionally renders less than the summary API returns: one
+posture band (assets, decisions waiting, high/critical risk), one decision cue
+with the active-hold count, and two distributions (risk in 3D, lifecycle as
+bars). Sensitivity, recommendation and individual scan-job detail belong on
+their own routes, not as extra dashboard tiles.
+
 ## Interaction and accessibility
 
 - All controls are native `button`, `a`, `input`, `select`, or existing UI
@@ -54,8 +62,8 @@ Every routed page must have:
 - Status is never conveyed by colour alone: pair tone with text, icon, or both.
 - Dialogs and drawers use `Dialog` / `useOverlayBehavior` patterns: Escape, focus
   trap, focus restore, and background scroll lock.
-- Motion stays at the project's two named animations and respects
-  `prefers-reduced-motion`.
+- Motion stays at the project's two named CSS animations plus the one-shot
+  dashboard WebGL reveal (ADR-0034) and respects `prefers-reduced-motion`.
 - Touch/keyboard targets follow the UI primitives; do not shrink hit areas.
 
 ## Engineering constraints
@@ -63,7 +71,8 @@ Every routed page must have:
 - Do not change API schemas, endpoint behaviour, permissions, or domain rules.
 - Do not add destructive actions, bulk disposal, automatic deletion, or
   placeholder integrations.
-- Do not add dependencies or install toolchains.
+- Do not add dependencies without a decision record. The one exception is the
+  code-split `three` dependency for the dashboard risk panel (ADR-0034).
 - Do not create per-component CSS files or arbitrary spacing values.
 - Use TypeScript strict mode, functional components, explicit prop interfaces,
   and no `any`.
