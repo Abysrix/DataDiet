@@ -10,7 +10,8 @@ institutional data is uploaded, and no destructive lifecycle action is enabled.
 > the ADR-0030/0031 cutover. Sections 9 and 10 record the exact commits,
 > deployment IDs and live checks. Section 11 adds the temporary ADR-0032
 > showcase configuration; the hosted configuration and its recorded live smoke
-> test are described in Section 11. Render's
+> test are described in Section 11. Section 12 records the ADR-0033/0034
+> dashboard redesign promotion to Preview and Production. Render's
 > free plan still sleeps after ~15 minutes of inactivity and takes about a
 > minute to wake; the operator has explicitly accepted that trade-off.
 
@@ -46,7 +47,7 @@ encrypted Environment Secrets, never committed values and never `VITE_*`.
 | `ENVIRONMENT` | `development` | no |
 | `DATABASE_URL` | `mssql+pymssql://datadiet_admin%40datadiet-demo-sql-sa5416:<password>@datadiet-demo-sql-sa5416.database.windows.net:1433/datadiet_demo?tds_version=7.4&login_timeout=20` | **yes** |
 | `AUTH_JWT_SECRET` | a unique `python -c "import secrets; print(secrets.token_urlsafe(48))"` value, at least 32 characters | **yes** |
-| `CORS_ORIGINS` | `https://data-diet.vercel.app` | no |
+| `CORS_ORIGINS` | `https://data-diet.vercel.app,https://datadiet-demo-git-ren-763816-tonystark300306-gmailcoms-projects.vercel.app,https://datadiet-demo-99f37eq2m-tonystark300306-gmailcoms-projects.vercel.app` | no |
 | `AUTH_DEV_PROVIDER_ENABLED` | `true` (explicit; also the development default) | no |
 | `AUTH_DEV_PRIVILEGED_EMAILS` | `SYNTH-demo@datadiet.local,SYNTH-admin@datadiet.local,SYNTH-reviewer@datadiet.local` | no |
 
@@ -258,10 +259,10 @@ prototype banner is rendered.
 | Vercel (frontend) | `VITE_SHOWCASE_MODE` | `true` | Retained for the showcase build; no global banner is rendered |
 
 A Render environment-variable change rebuilds the service. Vercel must be
-redeployed separately after its variable is set. Keep `CORS_ORIGINS` exactly
-`https://data-diet.vercel.app` and `VITE_API_BASE_URL` exactly
-`https://datadiet-demo-api.onrender.com` (no `/api/v1` suffix). Do **not** put a
-database URL, signing key or other secret in a `VITE_*` variable.
+redeployed separately after its variable is set. Keep `VITE_API_BASE_URL` exactly
+`https://datadiet-demo-api.onrender.com` (no `/api/v1` suffix) and use the exact
+`CORS_ORIGINS` origin list recorded in Section 12. Do **not** put a database
+URL, signing key or other secret in a `VITE_*` variable.
 
 ### 11.2 Seed Azure SQL
 
@@ -369,3 +370,59 @@ the showcase:
 Until steps 1–3 are executed and recorded, this remains a live prototype, not a
 production system. Local email/password signup, private workspaces and
 platform-owner oversight are still unimplemented.
+
+## 12. Dashboard redesign promotion (ADR-0033/0034, 2026-11-27)
+
+The runtime source is `Abysrix/DataDiet:render-demo` at commit `a5198a5`
+(`86013fb` dashboard redesign plus `a5198a5` project overview). The redesign is
+a data-driven inventory/decision snapshot with a Three.js panel fed by stored
+`risk_bands`; it is not decorative. The four deferred capabilities
+(`Passwords and local signup`, `Institutional identity synchronization`,
+`Approval delegation and access-review export`, `Account deletion`) were left
+untouched.
+
+Vercel Preview used `VITE_API_BASE_URL=https://datadiet-demo-api.onrender.com`
+as a Preview-scoped Config Variable. Production retained its existing API
+setting, so no Production variable was changed for this promotion. Vercel
+Preview deployment `dpl_AHLHD56GRsp4tPSZ2cYy25ckK17d` (UI `AHLHD56GR`) reached
+Ready from `render-demo`/`a5198a5` and served both preview aliases.
+Production deployment `dpl_6joVM8VXT7VM26eUGg5PHk8zYG2P` (UI `6joVM8VXT`)
+was promoted from that verified Preview, reached Ready in Environment
+Production, and is aliased to `https://data-diet.vercel.app`.
+
+Render rebuilt the API from the same commit as deploy
+`dep-dc4f536q1p3s73dr1e9g`; after the CORS correction, the CORS-only environment
+update (`updateServiceEnvVars`, `deployMode: BUILD_AND_DEPLOY`) created deploy
+`dep-dc4f8jlg1s2s73e8ablg`, which also reached `Deploy succeeded | Live`. No
+other Render secret or environment value was changed. The exact
+`CORS_ORIGINS` value is an explicit origin list with no wildcard and no trailing
+slash:
+
+- `https://data-diet.vercel.app`
+- `https://datadiet-demo-git-ren-763816-tonystark300306-gmailcoms-projects.vercel.app`
+- `https://datadiet-demo-99f37eq2m-tonystark300306-gmailcoms-projects.vercel.app`
+
+Live verification after those deployments:
+
+- `GET /api/v1/auth/config` from the git preview origin returned 200 and
+  `access-control-allow-origin` reflected that exact origin; the second preview
+  alias loaded `/signin` without a config failure.
+- The preview and production dashboards showed real API data: 39 assets in
+  scope, 2 awaiting decision, 4 high/critical, 62 records scanned and 4
+  completed jobs. Risk bands were Low 0, Moderate 4, High 0, Critical 4; the
+  lifecycle mix was Active 37, Under review 2, Archived 0, Pending disposal 0.
+- The production page served `assets/index-XWL4dWUH.js` and loaded
+  `assets/three.module-BSwTHy4A.js`. WebGL pixel output was not separately
+  browser-verified; automated tests cover the fallback and data contract only.
+- The full local gate passed before promotion: 395 backend tests passed with 20
+  skipped, 557 frontend tests passed across 38 files, backend and operator-script
+  Ruff passed, TypeScript typecheck passed, and the production build passed.
+  `npm audit --omit=dev --audit-level=moderate` reported 0 production
+  vulnerabilities.
+- No localhost, tunnel, demo endpoint, synthetic user-facing value or fabricated
+  success state was observed in the hosted flow.
+
+This promotion changes the shipped dashboard only. The application still uses
+development authentication, is a synthetic showcase, and is not a
+production-readiness claim. A later documentation-only commit may update GitHub
+without changing the served bundle, whose runtime source remains `a5198a5`.
