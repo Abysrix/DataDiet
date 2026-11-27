@@ -689,7 +689,12 @@ def _seed_assessments_and_decisions(
             existing_model = retention.assess_asset(db, asset.id, institution.id)
             existing = db.get(models.RetentionAssessment, existing_model.id)
             assessments += 1
-        if existing is None or index >= 2:
+        # A single demonstration decision is enough to show append-only review
+        # history. A second original decision would have ``supersedes_decision_id
+        # = NULL``; SQL Server's UNIQUE constraint treats repeated NULLs as a
+        # collision, while MySQL/PostgreSQL allow them. Keep the seeded dataset
+        # portable instead of relying on dialect-specific NULL semantics.
+        if existing is None or index >= 1:
             continue
         prior = db.execute(
             select(func.count(models.RetentionDecision.id)).where(

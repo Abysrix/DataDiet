@@ -44,6 +44,9 @@ def test_seed_creates_labeled_fictional_rows(client: TestClient, db: Session) ->
     assert summary.assets == len(ASSET_SPECS)
     assert summary.policies == 1
     assert summary.holds == 1
+    # One original decision is portable across SQL backends: SQL Server's
+    # UNIQUE constraint on supersedes_decision_id rejects a second NULL.
+    assert summary.decisions == 1
     assert summary.assessments > 0
     assert summary.risks > 0
     assert summary.classifications > 0
