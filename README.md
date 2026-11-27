@@ -148,6 +148,7 @@ have never been compiled, and it must not be enabled until the blockers in
 
 | Document | Contents |
 | --- | --- |
+| `docs/project-overview.md` | Plain-language explanation of what DataDiet does and does not do |
 | `docs/architecture.md` | Components, layering, schema, safety boundaries, phase map |
 | `docs/setup.md` | Exact PowerShell setup, run, test, and migration commands |
 | `docs/decisions.md` | Decision records, including the risk rule table |
