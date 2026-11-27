@@ -59,12 +59,12 @@ allowed. Capabilities that are not implemented stay explicitly labeled as such.
 
 - [x] Task 10: Expand seed to policies, holds, assessments, decisions, classification, risk, sources, scans and audit events
 - [x] Task 11: Update ADR-0032 verification, architecture status table, README and runbook
-- [ ] Task 12: Commit, push, configure Render/Vercel flags, seed Azure SQL and browser smoke test
+- [x] Task 12: Commit, push, configure Render/Vercel flags, seed Azure SQL and browser smoke test
 
 ### Checkpoint: Showcase ready
-- [ ] Hosted app renders no global banner
-- [ ] Hosted data traces back to Azure SQL through the API
-- [ ] Full gate passes from the exact deployed commit
+- [x] Hosted app renders no global banner
+- [x] Hosted data traces back to Azure SQL through the API
+- [x] Full gate passes from the exact deployed commit
 
 ## Risks and Mitigations
 

@@ -661,7 +661,16 @@ Users / Assets / Sources UI contracts. Every score shown comes from
 `app.services.risk.compute_risk` under `documented-risk-v1` (ADR-0005). No
 `SYNTH-` identifier, sample label or fixture is exposed when either flag is off;
 the seed is the only writer of fictional rows and uses `DATABASE_URL` plus a
-sanitized target print. **Pending (Task 12):** push to `render-demo`, set both
-hosted flags, seed Azure SQL, and perform the live browser pass that confirms the
-database-backed rows on the deployed app. Until then this ADR records
-a locally verified prototype, not a hosted claim.
+sanitized target print. **Hosted verification (2026-11-27).** The changes were
+pushed to `render-demo`, both hosted flags were set, and the Azure SQL seed
+created 6 rows and then 0 on rerun. Production build
+`dpl_6zZxQ6YE5bHDw1cncZqZU6q88GLD` from commit `2c495d7` is aliased to
+`https://data-diet.vercel.app`; a live browser pass found no global banner,
+dashboard counts read from Azure SQL, viewer `auth/me` scoped to institution
+`1`, and no console error, localhost or tunnel request. The admin directory
+initially exposed four pre-existing non-showcase accounts (IDs 1, 3, 4 and 6);
+after the operator explicitly approved irreversible removal of exactly those
+rows, a one-off reviewed transaction deleted them and recorded an audit event.
+No delete command was added to the application, and the directory now contains
+only synthetic accounts. The exact deployment, page sweep, approval and firewall
+evidence is in `docs/render-azure-sql-demo.md`.

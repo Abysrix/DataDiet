@@ -16,7 +16,7 @@
 - **Hosted origin and API wiring verified (2026-11-27, ADR-0030/0031):** the frontend domain is now `https://data-diet.vercel.app` (the earlier `datadiet-demo.vercel.app` alias is superseded). Render rebuilt commit `51e105e11d871f4263f5916619dba650964e4fbf` from `render-demo` as deploy `dep-dc49rcmi0phs739il3e0` after `CORS_ORIGINS` was set to the exact new origin; browser network capture shows `access-control-allow-origin: https://data-diet.vercel.app`. The Vercel project `datadiet-demo` is now connected to `Abysrix/DataDiet`, with root directory `frontend`, and production deployment `dpl_FtWVsAbniGwEcc59iY4RbXmfqzDc` is aliased to the new domain from the same commit. A first production deployment built with the stale `VITE_API_BASE_URL=https://data-diet.vercel.app/` and called the SPA itself; that value was corrected to `https://datadiet-demo-api.onrender.com` and the current deployment now calls `GET /api/v1/auth/config` on the Render origin with HTTP 200. The shipped bundle contains no `/api/v1/demo`, `SYNTH-`, or tunnel URL strings. Development sign-in is still enabled in the hosted environment; local identity, per-signup workspaces, platform-owner oversight and dev-login removal remain pending.
 - **`HEAD /api/v1/health` for platform monitors (implemented and tested locally, 2026-11-27):** the liveness route previously answered 405 to HEAD and CORS omitted HEAD from `Access-Control-Allow-Methods`. It now returns a bodyless 200 without touching the database, and the CORS method list includes HEAD so a cross-origin monitor with an `Origin` header is not rejected at preflight. `backend/tests/test_health.py` covers both behaviours; the hosted deployment has not yet been rebuilt with this change.
 
-## Showcase prototype status (ADR-0032, locally verified 2026-11-27)
+## Showcase prototype status (ADR-0032, hosted and locally verified 2026-11-27)
 
 Temporary showcase exception. Backend `SHOWCASE_MODE` and
 frontend `VITE_SHOWCASE_MODE` both default to `false`; the seeded rows exist only
@@ -24,8 +24,13 @@ when an operator runs `scripts/seed_showcase.py` against `DATABASE_URL` with an
 actor and `--confirm-showcase-write`. The browser talks only to the real API;
 there are no browser fixtures and no demo endpoints. The local gate passed
 (395 backend tests passed / 20 skipped, 553 Vitest tests passed, typecheck and
-production build). Hosted configuration, seeding and browser verification remain
-Task 12 and are not claimed here.
+production build). Hosted verification is recorded in
+`docs/render-azure-sql-demo.md`: the Azure SQL seed created 6 rows and then 0 on
+rerun, and production build `dpl_6zZxQ6YE5bHDw1cncZqZU6q88GLD` from commit
+`2c495d7` is aliased to `https://data-diet.vercel.app` with no global banner and
+only Render-origin API calls. The hosted directory was then checked and, after
+explicit operator approval, four pre-existing non-showcase account rows were
+removed with an audit event; no application delete command was added.
 
 | Area | Source of truth | Status in this build |
 | --- | --- | --- |
@@ -38,4 +43,4 @@ Task 12 and are not claimed here.
 | Showcase dataset | `scripts/seed_showcase.py` → Azure SQL via models | Implemented and idempotent; fictional rows labeled `[SHOWCASE SAMPLE]`, audit events recorded |
 | Archive execution, retrieval fulfilment, report export | — | Not implemented; UI says so explicitly |
 | Password signup, private workspaces, platform-owner oversight | — | Not implemented; development sign-in only for this prototype |
-| Hosted flags, live seed and hosted browser pass | Render service / Vercel project | Pending Task 12; do not treat this table as a hosted verification |
+| Hosted flags, live seed and hosted browser pass | Render service / Vercel project | Complete: flags set; seed idempotent in Azure SQL; production bundle from `2c495d7` has no banner and calls only the Render API; full page sweep and admin `/users` check recorded. Four approved non-showcase accounts removed after explicit human approval |

@@ -9,8 +9,8 @@ institutional data is uploaded, and no destructive lifecycle action is enabled.
 > Status: verified live on 2026-11-27 after ADR-0028/0029, then re-verified after
 > the ADR-0030/0031 cutover. Sections 9 and 10 record the exact commits,
 > deployment IDs and live checks. Section 11 adds the temporary ADR-0032
-> showcase configuration; that hosted configuration and its live smoke test are
-> **pending**, while the local gate for the source state has passed. Render's
+> showcase configuration; the hosted configuration and its recorded live smoke
+> test are described in Section 11. Render's
 > free plan still sleeps after ~15 minutes of inactivity and takes about a
 > minute to wake; the operator has explicitly accepted that trade-off.
 
@@ -315,6 +315,40 @@ personal data.
    states must be honest; do not call a page verified if it only shows a cached
    or mocked value.
 7. Keep screenshots and the network trace with the deployment record.
+
+**Recorded result (2026-11-27).** Render deploy
+`dep-dc4b10mi0phs739ltv4g` first served commit `ee654d6` with
+`SHOWCASE_MODE=true`; after the banner-removal push, Render auto-deployed commit
+`2c495d7` as its current successfully deployed commit. Vercel production
+`dpl_Bqp3BJUGmyKUkWvVzczzw4fd3Lp9` was replaced by
+`dpl_6zZxQ6YE5bHDw1cncZqZU6q88GLD`, promoted from commit `2c495d7` and aliased
+to `https://data-diet.vercel.app`; its shipped bundle no longer contains
+`Prototype mode`. The seed used actor `ops:tony-hosted-showcase`, created 6 rows
+and then 0 on rerun in institution #1, with exactly one decision because SQL
+Server's `uq_retention_decisions_supersedes` UNIQUE constraint rejects a second
+NULL. Firewall rules `AllowRenderOutbound_74_220_52_0_24` and
+`AllowRenderOutbound_74_220_60_0_24` permit Render egress. Live checks passed for
+`/health`, `HEAD /health`, `/health/ready`, the exact CORS origin, viewer
+`auth/me` (`id=11`, role `viewer`, institution `1`), dashboard counts read from
+Azure SQL, and browser requests only to
+`https://datadiet-demo-api.onrender.com`; no console error or localhost/tunnel
+request was observed. After the Render auto-deploy of `2c495d7`, `GET /health`,
+`HEAD /health` and `GET /health/ready` all returned 200, and the CORS preflight
+returned only `https://data-diet.vercel.app`.
+
+**Hosted page sweep (2026-11-27).** A signed-in viewer pass covered `/`,
+`/sources`, `/inventory`, `/risk`, `/classification`, `/retention`, `/holds`,
+`/recommendations`, `/archive`, `/retrieval`, `/reports` and `/showcase`. Data
+pages rendered rows read from the API; `/archive`, `/retrieval` and `/reports`
+explicitly said the capability was not implemented; no page rendered the global
+prototype banner, a demo endpoint, a fabricated success state or a localhost or
+tunnel request. An administrative pass checked `/users` through the real user
+API. That directory initially exposed four pre-existing non-showcase accounts
+(IDs 1, 3, 4 and 6). The operator explicitly approved irreversible removal of
+exactly those four rows; a one-off reviewed transaction deleted them, deleted
+zero dependent membership or external-identity rows, recorded an append-only
+audit event with no email addresses, and was verified by a directory count of
+seven synthetic-only accounts. No delete command was added to the application.
 
 ### 11.4 Human-gated teardown
 

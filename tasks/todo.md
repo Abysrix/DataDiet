@@ -69,13 +69,13 @@ Plan: `tasks/plan.md`. Source decision: `docs/decisions.md` ADR-0032.
   - Verification: docs review; ruff/typecheck unaffected.
   - Files: `docs/decisions.md`, `docs/architecture.md`, `README.md`, `docs/render-azure-sql-demo.md`.
 
-- [ ] Task 12: Deploy and smoke test
-  - Acceptance: commit pushed to `render-demo`; Render/Vercel flags configured; seed run against Azure SQL; hosted browser pass proves data and no fabricated integrations.
-  - Verification: full gate from deployed commit, live health/readiness, API list calls, browser screenshots/network trace.
+- [x] Task 12: Deploy and smoke test
+  - Acceptance: commit pushed to `render-demo`; Render/Vercel flags configured; seed run against Azure SQL; hosted browser pass proves data and no fabricated integrations. Four approved non-showcase account rows were removed after explicit human approval.
+  - Verification: full gate from deployed commit, live health/readiness, API list calls, browser text/network checks.
   - Files: deployment environment only.
 
 ## Checkpoint: Showcase ready
-- [ ] No global banner is rendered; data comes from Azure SQL via API; gate passes.
+- [x] No global banner is rendered; data comes from Azure SQL via API; gate passes.
 
 ## Gate result (local, before hosted deployment)
 
